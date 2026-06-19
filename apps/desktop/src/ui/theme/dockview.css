@@ -1,0 +1,118 @@
+.dockview-theme-bioeng {
+  --cg-dock-drag-bg: rgb(37 95 117 / 18%);
+  --cg-dock-scrollbar-bg: rgb(95 107 101 / 32%);
+
+  --dv-paneview-active-outline-color: var(--cg-focus);
+  --dv-tabs-and-actions-container-font-size: 12px;
+  --dv-tabs-and-actions-container-height: 28px;
+  --dv-drag-over-background-color: var(--cg-dock-drag-bg);
+  --dv-drag-over-border-color: var(--cg-accent);
+  --dv-tabs-container-scrollbar-color: var(--cg-border-strong);
+  --dv-icon-hover-background-color: var(--cg-surface-hover);
+  --dv-floating-box-shadow: var(--cg-command-shadow);
+  --dv-floating-border: 1px solid var(--cg-border);
+  --dv-overlay-z-index: 20;
+  --dv-tab-font-size: inherit;
+  --dv-border-radius: 0;
+  --dv-tab-margin: 0;
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: var(--cg-border-strong);
+  --dv-active-sash-transition-duration: 120ms;
+  --dv-active-sash-transition-delay: 0ms;
+  --dv-spacing-padding: 0;
+  --dv-tab-border-radius: 0;
+  --dv-sash-border-radius: 0;
+  --dv-dropdown-border-radius: 6px;
+  --dv-tab-close-icon-size: 12px;
+  --dv-floating-group-border: 1px solid var(--cg-border);
+  --dv-drag-over-border: 1px solid var(--cg-accent);
+  --dv-floating-group-dragging-opacity: 0.72;
+  --dv-group-view-background-color: var(--cg-editor-bg);
+  --dv-tabs-and-actions-container-background-color: var(--cg-titlebar-bg);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--cg-editor-bg);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--cg-titlebar-bg);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--cg-editor-bg);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--cg-titlebar-bg);
+  --dv-tab-divider-color: var(--cg-border);
+  --dv-activegroup-visiblepanel-tab-color: var(--cg-fg);
+  --dv-activegroup-hiddenpanel-tab-color: var(--cg-muted-fg);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--cg-muted-fg);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--cg-muted-fg);
+  --dv-separator-border: var(--cg-border);
+  --dv-paneview-header-border-color: var(--cg-border);
+  --dv-scrollbar-background-color: var(--cg-dock-scrollbar-bg);
+}
+
+:root[data-theme="dark"] .dockview-theme-bioeng {
+  --cg-dock-drag-bg: rgb(117 168 184 / 20%);
+  --cg-dock-scrollbar-bg: rgb(162 170 160 / 32%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .dockview-theme-bioeng {
+    --cg-dock-drag-bg: rgb(117 168 184 / 20%);
+    --cg-dock-scrollbar-bg: rgb(162 170 160 / 32%);
+  }
+}
+
+.dockview-theme-bioeng .dv-groupview > .dv-tabs-and-actions-container {
+  border-bottom: 1px solid var(--cg-border);
+}
+
+.dockview-theme-bioeng
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container {
+  border-bottom-color: var(--cg-border-strong);
+}
+
+.dockview-theme-bioeng .dv-tab {
+  padding: 0 8px;
+  font-family: var(--cg-font-sans);
+}
+
+.dockview-theme-bioeng
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tab.dv-active-tab {
+  box-shadow: inset 0 -1px 0 var(--cg-accent);
+}
+
+.dockview-theme-bioeng .dv-tab .dv-default-tab {
+  min-width: 0;
+  color: inherit;
+}
+
+.dockview-theme-bioeng .dv-tab .dv-default-tab .dv-default-tab-content {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dockview-theme-bioeng
+  .dv-tab
+  .dv-default-tab[data-preview]
+  .dv-default-tab-content {
+  font-style: italic;
+}
+
+.dockview-theme-bioeng .dv-tab .dv-default-tab .dv-default-tab-action {
+  margin-left: 2px;
+  color: var(--cg-muted-fg);
+  border-radius: 4px;
+  opacity: 0.72;
+}
+
+.dockview-theme-bioeng .dv-tab .dv-default-tab .dv-default-tab-action:hover {
+  color: var(--cg-fg);
+  background: var(--cg-surface-hover);
+  opacity: 1;
+}
+
+.dockview-theme-bioeng .dv-tab .dv-default-tab .dv-default-tab-action .dv-svg {
+  width: 10px;
+  height: 10px;
+}

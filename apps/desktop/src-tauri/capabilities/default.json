@@ -1,0 +1,30 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:app:allow-set-app-theme",
+    "core:window:allow-set-background-color",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-theme",
+    "dialog:default",
+    "opener:default",
+    "fs:default",
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$HOME/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$HOME/**" }]
+    },
+    { "identifier": "fs:allow-read-dir", "allow": [{ "path": "$HOME/**" }] },
+    { "identifier": "fs:allow-mkdir", "allow": [{ "path": "$HOME/**" }] },
+    { "identifier": "fs:allow-exists", "allow": [{ "path": "$HOME/**" }] },
+    { "identifier": "fs:allow-stat", "allow": [{ "path": "$HOME/**" }] },
+    { "identifier": "fs:allow-watch", "allow": [{ "path": "$HOME/**" }] },
+    { "identifier": "fs:allow-unwatch", "allow": [{ "path": "$HOME/**" }] }
+  ]
+}

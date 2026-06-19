@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "apps/desktop/src-tauri",
+    "crates/bioeng-agent",
+    "crates/bioeng-backup",
+    "crates/bioeng-data",
+    "crates/bioeng-pyenv",
+    "crates/bioeng-python-lsp",
+    "crates/bioeng-workspace",
+]
+resolver = "2"

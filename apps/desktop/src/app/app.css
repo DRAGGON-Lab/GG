@@ -1,0 +1,96 @@
+@keyframes app-command-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes app-command-popup-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px) scale(0.985);
+  }
+}
+
+/* Content surfaces (dock panels, editors, skeletons) blend in on mount so
+   fast loading-state swaps read as one continuous surface, not a flash.
+   Also used (much slower) for the launch-veil wordmark entrance. */
+@keyframes app-surface-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The launch veil's indeterminate progress sweep: a soft light scans the
+   track left-to-right on a loop, signaling the editor is still loading
+   beneath the wordmark. Translate-only so it stays cheap, and the segment
+   travels fully off both ends so the loop reset is never visible. The
+   segment is 1/3 of the track, so -100%..300% carries it edge to edge. */
+@keyframes app-progress-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+/* A small, calm confirmation entrance: the confirmation row that appears when
+   an action completes. Opacity + a barely-there scale (never from scale(0)) so
+   it blooms rather than pops. */
+@keyframes app-confirm-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* One-shot glow the moment a blueprint node reaches "proved" — a soft pulse
+   of the success color that swells and settles. Decorative and occasional,
+   so a longer, gentler curve is fine. */
+@keyframes app-node-proved {
+  0% {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  35% {
+    filter: drop-shadow(
+      0 0 6px color-mix(in srgb, var(--cg-success), transparent 25%)
+    );
+  }
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+/* Dialog exits — mirror the entrances, slightly faster (exits should resolve
+   quicker than they arrive). Modals stay centered and just fade + shrink a
+   hair; no positional slide. Applied via Base UI's [data-ending-style]. */
+@keyframes app-command-popup-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.985);
+  }
+}
+
+@keyframes app-command-backdrop-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Bottom-right toast entrance: rises a few px and fades in. Used by the
+   first-run diagnostics notice; calm, arriving rather than demanding. */
+@keyframes app-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+/* Toast exit — mirrors the entrance (settles back down as it fades) and
+   resolves faster than it arrived: the system responding, not arriving. */
+@keyframes app-toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}

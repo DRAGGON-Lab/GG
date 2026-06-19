@@ -1,0 +1,9 @@
+dist
+**/dist
+.vite
+node_modules
+.pnpm-store
+pnpm-lock.yaml
+target
+apps/desktop/src-tauri/gen
+apps/desktop/src-tauri/target

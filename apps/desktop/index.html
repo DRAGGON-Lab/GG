@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bio Eng Studio</title>
+    <script>
+      (() => {
+        try {
+          const storedMode = localStorage.getItem("bioeng.theme");
+          const mode = ["light", "dark", "system"].includes(storedMode)
+            ? storedMode
+            : "system";
+          const prefersDark = matchMedia(
+            "(prefers-color-scheme: dark)",
+          ).matches;
+          const theme =
+            mode === "system" ? (prefersDark ? "dark" : "light") : mode;
+
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.dataset.themeMode = mode;
+          document.documentElement.style.colorScheme = theme;
+        } catch {
+          document.documentElement.dataset.theme = "light";
+          document.documentElement.dataset.themeMode = "system";
+          document.documentElement.style.colorScheme = "light";
+        }
+      })();
+    </script>
+    <style>
+      /* First-paint background, before the CSS bundle loads. Mirrors
+         --cg-editor-bg (light/dark) in ui/theme/theme.css so the initial
+         blank frame is the app's canvas color, not a theme flash. */
+      html {
+        background-color: #fcfdfb;
+      }
+      html[data-theme="dark"] {
+        background-color: #0f110e;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/app/main.tsx"></script>
+  </body>
+</html>

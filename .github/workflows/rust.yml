@@ -1,0 +1,71 @@
+name: Rust
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/desktop/src-tauri/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "rustfmt.toml"
+      - ".github/workflows/rust.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # tauri::generate_context! embeds the frontend dist at compile time,
+      # so the desktop crate cannot build without it.
+      - name: Build desktop frontend
+        run: pnpm --filter @bioeng/desktop build
+
+      # Keep this pin in lockstep with rust-toolchain.toml so CI and the local
+      # pre-commit hook run the exact same clippy/rustfmt and never disagree.
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked

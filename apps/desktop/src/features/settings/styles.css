@@ -1,0 +1,4 @@
+.app-settings-editor-preview .monaco-editor,
+.app-settings-editor-preview .monaco-editor-background {
+  border-radius: 7px;
+}

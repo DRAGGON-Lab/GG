@@ -1,0 +1,31 @@
+{
+  "name": "bioeng",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "dev": "pnpm desktop:dev",
+    "build": "pnpm -r build",
+    "desktop:dev": "pnpm --filter @bioeng/desktop tauri dev",
+    "desktop:build": "pnpm --filter @bioeng/desktop build",
+    "desktop:bundle": "pnpm --filter @bioeng/desktop tauri build",
+    "desktop:web:dev": "pnpm --filter @bioeng/desktop dev",
+    "desktop:preview": "pnpm --filter @bioeng/desktop preview",
+    "preview": "pnpm desktop:preview",
+    "tauri": "pnpm --filter @bioeng/desktop tauri",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky",
+    "postinstall": "scripts/fetch-python-runtime.sh --if-missing"
+  },
+  "lint-staged": {
+    "*.rs": "rustfmt --edition 2021",
+    "*": "prettier --write --ignore-unknown"
+  },
+  "devDependencies": {
+    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7",
+    "prettier": "^3.8.3"
+  }
+}

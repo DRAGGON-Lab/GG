@@ -1,0 +1,3 @@
+# Map arbitrary JSON (serde_json::Value) to `unknown` in the generated TypeScript.
+[typescript.type_mappings]
+Value = "unknown"

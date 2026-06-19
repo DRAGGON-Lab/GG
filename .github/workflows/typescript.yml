@@ -1,0 +1,39 @@
+name: TypeScript
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/desktop/**"
+      - "!apps/desktop/src-tauri/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "prettier.config.cjs"
+      - ".github/workflows/typescript.yml"
+
+jobs:
+  typescript:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm --filter @bioeng/desktop lint
+
+      - name: Build desktop frontend
+        run: pnpm --filter @bioeng/desktop build

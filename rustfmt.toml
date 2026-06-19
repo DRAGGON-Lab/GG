@@ -1,0 +1,3 @@
+# Stable rustfmt cannot enforce the project-specific std/bioeng/crate import
+# sectioning, but it can keep individual import lists deterministic.
+reorder_imports = true

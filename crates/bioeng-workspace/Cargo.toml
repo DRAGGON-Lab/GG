@@ -1,0 +1,11 @@
+[package]
+name = "bioeng-workspace"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2"] }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3"

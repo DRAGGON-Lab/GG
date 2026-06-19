@@ -1,0 +1,4 @@
+# Re-sign macOS dev binaries with a stable identity so keychain access
+# approvals survive rebuilds. See scripts/macos-dev-runner.sh.
+[target.'cfg(target_os = "macos")']
+runner = "scripts/macos-dev-runner.sh"

@@ -1,0 +1,126 @@
+/* The agent's proposed changes, rendered inline in the Monaco editor: a faint
+   wash over the inserted span (with the added characters highlighted) and, per
+   hunk, a view zone above it showing the original line(s) with the removed
+   characters highlighted plus Accept / Reject controls. */
+
+.app-editor-monaco .app-agent-proposed-insert {
+  background: color-mix(in srgb, var(--cg-success), transparent 90%);
+}
+
+.app-editor-monaco .app-agent-proposed-insert-margin {
+  width: 3px !important;
+  margin-left: 2px;
+  background: color-mix(in srgb, var(--cg-success), transparent 25%);
+  border-radius: 2px;
+}
+
+/* Just the added characters, highlighted within the new line. */
+.app-editor-monaco .app-agent-proposed-added {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--cg-success), transparent 66%);
+}
+
+/* z-index lifts the zone above Monaco's .view-lines layer (appended after
+   .view-zones and sized to the full scroll height), which otherwise sits on top
+   of the band and swallows clicks on the Accept/Reject buttons. */
+.app-agent-proposed-zone {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+/* Neutral header so the green Accept and red Reject read as distinct actions
+   rather than two buttons sharing the deletion's red wash. */
+.app-agent-proposed-zone-header {
+  display: flex;
+  height: 28px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--cg-border), transparent 30%);
+  background: color-mix(in srgb, var(--cg-surface), var(--cg-editor-bg) 35%);
+}
+
+.app-agent-proposed-zone-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cg-muted-fg);
+}
+
+.app-agent-proposed-zone-spacer {
+  flex: 1 1 auto;
+}
+
+.app-agent-proposed-zone-btn {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background-color 100ms ease-out,
+    border-color 100ms ease-out,
+    color 100ms ease-out;
+}
+
+/* Accept is the primary action: a soft green fill. */
+.app-agent-proposed-zone-accept {
+  border-color: color-mix(in srgb, var(--cg-success), transparent 60%);
+  background: color-mix(in srgb, var(--cg-success), transparent 88%);
+  color: var(--cg-success);
+}
+
+.app-agent-proposed-zone-accept:hover {
+  border-color: color-mix(in srgb, var(--cg-success), transparent 35%);
+  background: color-mix(in srgb, var(--cg-success), transparent 78%);
+}
+
+/* Reject is quieter — neutral until hovered, then red. */
+.app-agent-proposed-zone-reject {
+  color: var(--cg-muted-fg);
+}
+
+.app-agent-proposed-zone-reject:hover {
+  background: color-mix(in srgb, var(--cg-danger), transparent 88%);
+  color: var(--cg-danger);
+}
+
+.app-agent-proposed-zone-kbd {
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 500;
+  opacity: 0.65;
+}
+
+/* The full original line(s), muted; only the removed characters carry the red.
+   No left padding so the ghost text lines up column-for-column with the editor's
+   code lines (the view zone starts at the content origin). */
+.app-agent-proposed-zone-deleted {
+  overflow-x: auto;
+  padding: 4px 0;
+  border-top: 1px solid color-mix(in srgb, var(--cg-danger), transparent 80%);
+  background: color-mix(in srgb, var(--cg-danger), transparent 95%);
+  white-space: pre;
+  color: var(--cg-muted-fg);
+}
+
+.app-agent-proposed-removed {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--cg-danger), transparent 64%);
+  color: var(--cg-fg);
+}
