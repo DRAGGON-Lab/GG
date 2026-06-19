@@ -4,6 +4,7 @@
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 
+use bioeng_agent::AgentMode;
 use bioeng_data::Database;
 
 pub fn dispatch(
@@ -11,9 +12,10 @@ pub fn dispatch(
     capability: &str,
     args: &Value,
     tool_use_id: &str,
+    mode: AgentMode,
 ) -> Result<Value, String> {
     match capability {
-        "editor.edit" => editor_edit(app, args, tool_use_id),
+        "editor.edit" => editor_edit(app, args, tool_use_id, mode),
         "skills.load" => crate::skills::capability_load(app, args),
         "memory.search" => {
             let query = require_str(args, "query", "memory.search")?;
@@ -30,7 +32,12 @@ pub fn dispatch(
 /// (Cursor-style apply-then-review). `tool_use_id` lets the webview correlate
 /// the change back to this tool call. Write tool, but every character lands as a
 /// proposed change the user accepts or rejects.
-fn editor_edit(app: &AppHandle, args: &Value, tool_use_id: &str) -> Result<Value, String> {
+fn editor_edit(
+    app: &AppHandle,
+    args: &Value,
+    tool_use_id: &str,
+    mode: AgentMode,
+) -> Result<Value, String> {
     let uri = require_str(args, "uri", "editor.edit")?;
     let old_text = require_str(args, "oldText", "editor.edit")?;
     let new_text = require_str(args, "newText", "editor.edit")?;
@@ -46,6 +53,7 @@ fn editor_edit(app: &AppHandle, args: &Value, tool_use_id: &str) -> Result<Value
             "oldText": old_text,
             "newText": new_text,
             "toolUseId": tool_use_id,
+            "mode": mode,
         }),
     )
     .map_err(|error| error.to_string())?;

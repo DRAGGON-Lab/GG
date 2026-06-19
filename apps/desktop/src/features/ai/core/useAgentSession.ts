@@ -1,4 +1,4 @@
-import { PermissionBehavior } from "@protocol";
+import { AgentMode, PermissionBehavior } from "@protocol";
 import type { AgentMessage, PermissionPrompt } from "@protocol";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -9,6 +9,7 @@ import {
   aiConversationContextSet,
   aiConversationCreate,
   aiConversationGet,
+  aiConversationModeSet,
   aiConversationTitleGenerate,
   aiConversationTitleUpdate,
   onAgentMessage,
@@ -52,6 +53,7 @@ export function useAiConversation({
   const [entries, setEntries] = useState<TranscriptEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [mode, setModeState] = useState<AgentMode>(AgentMode.Review);
   const [permission, setPermission] = useState<PermissionPrompt | null>(null);
   const [agentError, setAgentError] = useState<AiProviderCommandError | null>(
     null,
@@ -65,6 +67,7 @@ export function useAiConversation({
     (next: AiConversation) => {
       activeConversationIdRef.current = next.id;
       setConversation(next);
+      setModeState(next.mode ?? AgentMode.Review);
       setEntries(
         next.transcriptEntries.map((entry) =>
           normalizeTranscriptEntry(entry.payload, entry.id),
@@ -145,6 +148,7 @@ export function useAiConversation({
     setBusy(false);
     setPermission(null);
     setAgentError(null);
+    setModeState(AgentMode.Review);
     pendingRef.current = [];
 
     const load = async () => {
@@ -340,6 +344,7 @@ export function useAiConversation({
             agentId: activeConversation.agentId || agentId,
             prompt: promptWithNotes,
             contextAttachments,
+            mode,
           });
           void refreshConversationMetadata(activeConversation.id);
         } catch (error) {
@@ -362,11 +367,28 @@ export function useAiConversation({
       entries,
       ingest,
       initialTitle,
+      mode,
       onConversationReady,
       onConversationUpdated,
       refreshConversationMetadata,
     ],
   );
+
+  // Persist the autonomy choice on the conversation so it restores on reopen.
+  // Behavior is driven by the `mode` sent with each turn; this just records it.
+  const setMode = useCallback((next: AgentMode) => {
+    setModeState(next);
+    const conversationId = activeConversationIdRef.current;
+    if (conversationId) {
+      void aiConversationModeSet(conversationId, next)
+        .then((updated) => {
+          if (updated && activeConversationIdRef.current === updated.id) {
+            setConversation(updated);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   const interrupt = useCallback(() => {
     if (conversation) {
@@ -390,10 +412,12 @@ export function useAiConversation({
     agentError,
     interrupt,
     loading,
+    mode,
     permission,
     respondPermission,
     send,
     setContextAttachments,
+    setMode,
   };
 }
 

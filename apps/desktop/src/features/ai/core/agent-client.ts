@@ -3,6 +3,7 @@ import type {
   PermissionPrompt,
   PromptRequest,
   SessionMessageNotification,
+  WorkspaceRequest,
 } from "@protocol";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -73,6 +74,13 @@ export function aiConversationTitleGenerate(prompts: string[]) {
   });
 }
 
+export function aiConversationModeSet(conversationId: string, mode: string) {
+  return invoke<AiConversation | null>("ai_conversation_mode_set", {
+    conversationId,
+    mode,
+  });
+}
+
 export function agentRespondPermission(
   requestId: string,
   behavior: PermissionBehavior,
@@ -99,4 +107,27 @@ export function onAgentPermissionRequest(
   return listen<PermissionPrompt>("agent-permission-request", (event) =>
     callback(event.payload),
   );
+}
+
+export function onAgentWorkspaceRequest(
+  callback: (request: WorkspaceRequest) => void,
+) {
+  return listen<WorkspaceRequest>("agent-workspace-request", (event) =>
+    callback(event.payload),
+  );
+}
+
+/// Resolve a parked workspace request: `result` is the tool result returned to
+/// the model (a string for reads, a structured value otherwise); `isError` marks
+/// a failure the agent should see and recover from.
+export function agentRespondWorkspaceRequest(
+  requestId: string,
+  result: unknown,
+  isError: boolean,
+) {
+  return invoke<void>("agent_respond_workspace_request", {
+    requestId,
+    result,
+    isError,
+  });
 }

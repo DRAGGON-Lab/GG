@@ -13,6 +13,23 @@ export interface PermissionPrompt {
   input: unknown;
 }
 
+export interface PromptContextAttachment {
+  kind: string;
+  label: string;
+  payload: unknown;
+}
+
+/**
+ * The agent's autonomy for a turn. In `Review`, file edits and new files arrive
+ * as pending changes the user accepts or rejects and destructive ops (delete,
+ * move) require an explicit permission prompt; in `Agentic`, every file op is
+ * applied immediately without per-change review.
+ */
+export enum AgentMode {
+  Review = "review",
+  Agentic = "agentic",
+}
+
 /**
  * Webview → host: start (or continue) a turn in a persisted conversation with the
  * given agent. Context attachments are explicit workspace anchors such as a file
@@ -22,13 +39,8 @@ export interface PromptRequest {
   conversationId: string;
   agentId: string;
   prompt: string;
-  contextAttachments: Array<PromptContextAttachment>;
-}
-
-export interface PromptContextAttachment {
-  kind: string;
-  label: string;
-  payload: unknown;
+  contextAttachments?: PromptContextAttachment[];
+  mode?: AgentMode;
 }
 
 /** One streamed event for a session, rendered directly by the webview. */
@@ -88,6 +100,22 @@ export type AgentMessage =
 export interface SessionMessageNotification {
   conversationId: string;
   message: AgentMessage;
+}
+
+/**
+ * Host → webview event (`agent-workspace-request`): a filesystem operation the
+ * webview executes against the open workspace — reads from the live buffer or
+ * disk, writes/creates surface as proposed changes, destructive ops run after
+ * any required approval. The webview resolves it via the
+ * `agent_respond_workspace_request` command, keyed by `request_id`. `mode` tells
+ * the webview whether to auto-accept the resulting change.
+ */
+export interface WorkspaceRequest {
+  requestId: string;
+  conversationId: string;
+  op: string;
+  args: unknown;
+  mode: AgentMode;
 }
 
 export enum PermissionBehavior {

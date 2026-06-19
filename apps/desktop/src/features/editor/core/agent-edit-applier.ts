@@ -10,6 +10,7 @@ import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import { agentEditInProgress } from "@/features/editor/core/agent-edit-flags";
 import { diffInlineSides } from "@/features/editor/core/inline-diff";
 import {
+  acceptChange,
   addProposedChange,
   dropProposedChangesForUri,
   getProposedChanges,
@@ -38,6 +39,19 @@ export type EditorWorkspaceDelegates = {
     position?: RevealPosition,
   ) => Promise<boolean> | boolean;
   saveDocument: (path: string, text: string) => Promise<void> | void;
+  /// The open workspace folder, or null when none is open.
+  getWorkspaceRoot: () => string | null;
+  /// Open a brand-new file's buffer (path set, content set) WITHOUT writing it to
+  /// disk, so its creation can be reviewed before it lands. Returns the document.
+  openNewFileBuffer: (
+    path: string,
+    content: string,
+  ) => Promise<EditorDocument | null>;
+  /// Discard an unsaved new-file buffer (close its tab, forget the document) — for
+  /// a rejected `create_file`.
+  discardNewFile: (path: string) => void;
+  /// Close an open document's tab (used when the agent deletes or moves a file).
+  closeDocument: (pathOrUri: string) => void;
 };
 
 let delegates: EditorWorkspaceDelegates | null = null;
@@ -50,6 +64,12 @@ export function setEditorWorkspaceDelegates(
   next: EditorWorkspaceDelegates | null,
 ) {
   delegates = next;
+}
+
+/// The workspace delegates the proposed-changes applier and the workspace bridge
+/// share. Null when no editor page is mounted.
+export function getEditorWorkspaceDelegates(): EditorWorkspaceDelegates | null {
+  return delegates;
 }
 
 /// Idempotent: wire the store controller and the agent-edit listener once. Safe
@@ -86,6 +106,14 @@ const controller = {
     // tracked range.
     const ordered = [...changes].sort(byLiveStartDescending);
     for (const change of ordered) {
+      if (change.kind === "create") {
+        // The new file was never written to disk — drop its unsaved buffer.
+        removeDecoration(change);
+        if (change.path) {
+          delegates?.discardNewFile(change.path);
+        }
+        continue;
+      }
       restoreOriginal(change);
     }
   },
@@ -216,11 +244,13 @@ async function applyAgentEdit(edit: AgentEditorEdit) {
 
   const createdIds = model.deltaDecorations([], decorations);
 
+  const changeId = crypto.randomUUID();
   addProposedChange({
     appliedAt: Date.now(),
     decorationId: createdIds[0] ?? null,
     highlightDecorationIds: createdIds.slice(1),
-    id: crypto.randomUUID(),
+    id: changeId,
+    kind: "edit",
     newText: edit.newText,
     originalText,
     path,
@@ -230,6 +260,86 @@ async function applyAgentEdit(edit: AgentEditorEdit) {
   });
 
   attachUndoReconciler(model);
+
+  // Agentic mode applies without review: accept immediately so the change is
+  // saved to disk and the decoration clears.
+  if (edit.mode === "agentic") {
+    acceptChange(changeId);
+  }
+}
+
+/// Open a new file's buffer with `content` already in it and surface its creation
+/// as an all-additions proposed change. In `agentic` mode it is accepted (written
+/// to disk) immediately. Returns the change id, or null if the buffer couldn't be
+/// opened. The caller (the workspace bridge) is responsible for refusing to
+/// overwrite an existing file.
+export async function proposeCreatedFile(args: {
+  uri: string;
+  path: string;
+  content: string;
+  toolUseId?: string | null;
+  autoAccept: boolean;
+}): Promise<string | null> {
+  if (!delegates) {
+    return null;
+  }
+
+  const document = await delegates.openNewFileBuffer(args.path, args.content);
+  if (!document) {
+    return null;
+  }
+
+  const model = await waitForModel(args.uri, 5000);
+  if (!model || model.isDisposed()) {
+    return null;
+  }
+
+  const fullRange = model.getFullModelRange();
+  const decorations: monaco.editor.IModelDeltaDecoration[] = [
+    {
+      options: {
+        className: "app-agent-proposed-insert",
+        isWholeLine: true,
+        linesDecorationsClassName: "app-agent-proposed-insert-margin",
+        stickiness:
+          monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+      },
+      range: fullRange,
+    },
+  ];
+  if (args.content.length > 0) {
+    decorations.push({
+      options: {
+        inlineClassName: "app-agent-proposed-added",
+        stickiness:
+          monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+      },
+      range: fullRange,
+    });
+  }
+
+  const createdIds = model.deltaDecorations([], decorations);
+
+  const changeId = crypto.randomUUID();
+  addProposedChange({
+    appliedAt: Date.now(),
+    decorationId: createdIds[0] ?? null,
+    highlightDecorationIds: createdIds.slice(1),
+    id: changeId,
+    kind: "create",
+    newText: args.content,
+    originalText: "",
+    path: args.path,
+    status: "pending",
+    toolUseId: args.toolUseId ?? null,
+    uri: args.uri,
+  });
+
+  if (args.autoAccept) {
+    acceptChange(changeId);
+  }
+
+  return changeId;
 }
 
 function modelFor(uri: string): monaco.editor.ITextModel | null {

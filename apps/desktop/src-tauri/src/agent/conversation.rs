@@ -8,13 +8,16 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
 
 use bioeng_agent::{
-    collect_stream, AgentClient, AgentMessage, ContentBlock, Message, PermissionPrompt,
-    SessionMessageNotification, StreamDelta, StreamRequest, Usage,
+    collect_stream, AgentClient, AgentMessage, AgentMode, ContentBlock, Message, PermissionPrompt,
+    SessionMessageNotification, StreamDelta, StreamRequest, Usage, WorkspaceRequest,
 };
 use bioeng_data::Database;
 
 use super::{
-    agents::AgentDefinition, capabilities, config, memory, prompt, state::AgentState, tools,
+    agents::AgentDefinition,
+    capabilities, config, memory, prompt,
+    state::{AgentState, WorkspaceReply},
+    tools::{self, ToolPolicy},
 };
 use crate::secrets::{types::AiProviderCommandError, KeychainSecretStore};
 
@@ -23,6 +26,7 @@ pub async fn run(
     conversation_id: String,
     task_id: u64,
     agent: &'static AgentDefinition,
+    mode: AgentMode,
     mut messages: Vec<Message>,
 ) {
     // The freshly-pushed user message is last in the history; everything from here
@@ -40,7 +44,7 @@ pub async fn run(
     };
 
     let tools = tools::assemble_tools(&app, agent).await;
-    let system = prompt::build_system_prompt(&app, agent);
+    let system = prompt::build_system_prompt(&app, agent, mode);
     let mut total = Usage::default();
     let mut transcript_blocks = Vec::new();
 
@@ -125,18 +129,14 @@ pub async fn run(
             let mut results = Vec::new();
             for block in &assembled.content {
                 if let ContentBlock::ToolUse { id, name, input } = block {
-                    let auto_allowed = tools::auto_allow(name)
-                        || (crate::mcp::is_mcp_tool(name)
-                            && app
-                                .state::<crate::mcp::McpRegistry>()
-                                .auto_allow(name)
-                                .await);
-                    let allowed = auto_allowed
-                        || request_permission(&app, &conversation_id, task_id, name, input).await;
+                    let allowed =
+                        tool_allowed(&app, &conversation_id, task_id, mode, name, input).await;
                     let (value, is_error) = if !allowed {
                         (json!("The user denied this tool call."), true)
                     } else {
-                        match execute_tool(&app, id, name, input).await {
+                        match execute_tool(&app, &conversation_id, task_id, mode, id, name, input)
+                            .await
+                        {
                             Ok(value) => (value, false),
                             Err(error) => (json!(error), true),
                         }
@@ -309,21 +309,54 @@ pub(super) fn emit(app: &AppHandle, conversation_id: &str, message: AgentMessage
     );
 }
 
-/// Run a tool's capability off the async worker — capability dispatch makes blocking
-/// synchronous calls into app state, so it must not stall the runtime.
+/// Decide whether a tool call may run. Reads and proposed changes always proceed;
+/// destructive ops proceed in Agentic mode but prompt for approval in Review mode;
+/// MCP tools keep their per-server auto-allow flag and otherwise prompt.
+async fn tool_allowed(
+    app: &AppHandle,
+    conversation_id: &str,
+    task_id: u64,
+    mode: AgentMode,
+    tool_name: &str,
+    input: &Value,
+) -> bool {
+    if crate::mcp::is_mcp_tool(tool_name) {
+        return app
+            .state::<crate::mcp::McpRegistry>()
+            .auto_allow(tool_name)
+            .await
+            || request_permission(app, conversation_id, task_id, tool_name, input).await;
+    }
+    match tools::policy(tool_name) {
+        Some(ToolPolicy::Auto) | Some(ToolPolicy::ProposedChange) => true,
+        Some(ToolPolicy::Confirm) => {
+            mode == AgentMode::Agentic
+                || request_permission(app, conversation_id, task_id, tool_name, input).await
+        }
+        None => request_permission(app, conversation_id, task_id, tool_name, input).await,
+    }
+}
+
+/// Run a tool. MCP tools call out to the registry; webview filesystem tools
+/// round-trip to the open workspace; the rest resolve in-process via capability
+/// dispatch (which makes blocking calls and so runs off the async worker).
 async fn execute_tool(
     app: &AppHandle,
+    conversation_id: &str,
+    task_id: u64,
+    mode: AgentMode,
     tool_use_id: &str,
     tool_name: &str,
     input: &Value,
 ) -> Result<Value, String> {
-    // MCP tools run over the network/child process from the registry — async, not
-    // blocking — so route them before the in-process capability dispatch.
     if crate::mcp::is_mcp_tool(tool_name) {
         return app
             .state::<crate::mcp::McpRegistry>()
             .call_tool(tool_name, input)
             .await;
+    }
+    if tools::is_webview_tool(tool_name) {
+        return webview_call(app, conversation_id, task_id, mode, tool_name, input).await;
     }
     let capability = tools::capability_for(tool_name)
         .ok_or_else(|| format!("Unknown tool: {tool_name}"))?
@@ -332,10 +365,54 @@ async fn execute_tool(
     let input = input.clone();
     let tool_use_id = tool_use_id.to_string();
     tokio::task::spawn_blocking(move || {
-        capabilities::dispatch(&app, &capability, &input, &tool_use_id)
+        capabilities::dispatch(&app, &capability, &input, &tool_use_id, mode)
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+/// Park a oneshot, emit a filesystem op to the webview, and await its reply. The
+/// webview owns the workspace (the live Monaco buffers and the on-disk files), so
+/// reads, proposed changes, and destructive ops all resolve there.
+async fn webview_call(
+    app: &AppHandle,
+    conversation_id: &str,
+    task_id: u64,
+    mode: AgentMode,
+    op: &str,
+    args: &Value,
+) -> Result<Value, String> {
+    let (sender, receiver) = oneshot::channel();
+    let request_id = app
+        .state::<AgentState>()
+        .park_workspace(conversation_id, task_id, sender);
+    app.emit(
+        "agent-workspace-request",
+        WorkspaceRequest {
+            request_id,
+            conversation_id: conversation_id.to_string(),
+            op: op.to_string(),
+            args: args.clone(),
+            mode,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    // Local filesystem ops resolve near-instantly; a long wait means no workspace
+    // webview is listening (e.g. the standalone AI page, no editor open). Bound it
+    // so the agent gets a clear answer instead of stalling the turn.
+    match tokio::time::timeout(std::time::Duration::from_secs(30), receiver).await {
+        Ok(Ok(WorkspaceReply { value, is_error })) => {
+            if is_error {
+                Err(content_to_string(&value))
+            } else {
+                Ok(value)
+            }
+        }
+        Ok(Err(_)) | Err(_) => Err(
+            "No workspace is available to run this file operation. A workspace folder must be open in the editor."
+                .to_string(),
+        ),
+    }
 }
 
 async fn request_permission(

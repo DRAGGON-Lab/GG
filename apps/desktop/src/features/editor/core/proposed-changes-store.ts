@@ -14,9 +14,16 @@ import { useMemo, useSyncExternalStore } from "react";
 
 export type ProposedChangeStatus = "pending" | "accepted" | "rejected";
 
+/// `edit` replaces a span in an existing file; `create` is a whole new file shown
+/// as all-additions. They differ on reject: an edit restores the original text, a
+/// create discards the unsaved new buffer.
+export type ProposedChangeKind = "edit" | "create";
+
 export type ProposedChange = {
   /// Stable id for this change, independent of the model/decoration lifecycle.
   id: string;
+  /// Whether this change edits an existing file or creates a new one.
+  kind: ProposedChangeKind;
   /// The `edit` tool-use id, so a chat card could correlate to its hunk.
   toolUseId: string | null;
   uri: string;
@@ -246,6 +253,12 @@ export function takeAgentEditNotesSinceLastSend(): string[] {
 
 function recordRejectionNote(change: ProposedChange) {
   const where = change.path ? fileLabel(change.path) : change.uri;
+  if (change.kind === "create") {
+    pendingAgentNotes.push(
+      `The user rejected the new file ${where}; it was not created. Do not re-create it; take a different approach.`,
+    );
+    return;
+  }
   pendingAgentNotes.push(
     `The user rejected your proposed edit to ${where}. Do not re-apply it; take a different approach.`,
   );

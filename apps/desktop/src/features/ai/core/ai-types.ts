@@ -1,4 +1,4 @@
-import type { PromptContextAttachment } from "@protocol";
+import type { AgentMode, PromptContextAttachment } from "@protocol";
 
 export type AiContextAttachmentInput = PromptContextAttachment;
 
@@ -21,6 +21,7 @@ export type AiConversation = {
   contextAttachments: AiContextAttachment[];
   createdAt: string;
   id: string;
+  mode: AgentMode;
   title: string;
   transcriptEntries: AiTranscriptEntry[];
   updatedAt: string;

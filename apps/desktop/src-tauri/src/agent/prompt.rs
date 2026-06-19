@@ -4,6 +4,7 @@
 
 use tauri::{AppHandle, Manager};
 
+use bioeng_agent::AgentMode;
 use bioeng_data::Database;
 
 use super::agents::AgentDefinition;
@@ -12,7 +13,7 @@ use super::agents::AgentDefinition;
 /// the long tail.
 const MEMORY_PER_KIND: usize = 5;
 
-pub fn build_system_prompt(app: &AppHandle, agent: &AgentDefinition) -> String {
+pub fn build_system_prompt(app: &AppHandle, agent: &AgentDefinition, mode: AgentMode) -> String {
     let mut prompt = agent.system_prompt.to_string();
     if agent.use_skills {
         if let Some(section) = skills_section(app) {
@@ -24,7 +25,16 @@ pub fn build_system_prompt(app: &AppHandle, agent: &AgentDefinition) -> String {
             prompt.push_str(&section);
         }
     }
+    prompt.push_str(mode_section(mode));
     prompt
+}
+
+/// The autonomy note, appended last so the stable prompt prefix stays cacheable.
+fn mode_section(mode: AgentMode) -> &'static str {
+    match mode {
+        AgentMode::Review => "\n\n## Mode: Review\nYour file edits and new files appear as pending changes the user accepts or rejects, and deletions and moves require explicit approval. Do not ask for permission in chat — the review happens on each change itself. Proceed and make the changes; if the user rejects one, take a different approach.",
+        AgentMode::Agentic => "\n\n## Mode: Agentic\nYour edits, new files, deletions, and moves are applied immediately without per-change review. Work autonomously toward the goal without asking for confirmation. Be deliberate — especially with deletions and moves — and prefer the smallest changes that accomplish the task.",
+    }
 }
 
 fn memory_section(app: &AppHandle) -> Option<String> {

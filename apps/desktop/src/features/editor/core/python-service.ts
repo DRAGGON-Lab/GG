@@ -1,3 +1,4 @@
+import type { AgentMode } from "@protocol";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
@@ -278,11 +279,13 @@ export function onPythonDiagnostics(
 /// A proposed edit the agent's `edit` tool emitted: replace `oldText` with
 /// `newText` in the document at `uri`. The webview locates `oldText` in the live
 /// Monaco model (the source of truth) and applies it as a pending inline diff.
+/// `mode` is the turn's autonomy: in "agentic" the diff is auto-accepted.
 export type AgentEditorEdit = {
   uri: string;
   oldText: string;
   newText: string;
   toolUseId?: string | null;
+  mode?: AgentMode;
 };
 
 export function onAgentEditorEdit(

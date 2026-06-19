@@ -135,6 +135,29 @@ impl Database {
         }
     }
 
+    pub fn set_ai_conversation_mode(
+        &self,
+        conversation_id: &str,
+        mode: &str,
+    ) -> Result<Option<AiConversation>, String> {
+        if mode != "review" && mode != "agentic" {
+            return Err(format!("Unknown agent mode: {mode}"));
+        }
+        let connection = self.connection()?;
+        let updated = connection
+            .execute(
+                "UPDATE ai_conversations SET mode = ?2 WHERE id = ?1",
+                params![conversation_id, mode],
+            )
+            .map_err(|error| error.to_string())?;
+
+        if updated == 0 {
+            Ok(None)
+        } else {
+            get_conversation(&connection, conversation_id)
+        }
+    }
+
     pub fn set_ai_context_attachments(
         &self,
         conversation_id: &str,
@@ -314,10 +337,10 @@ fn get_conversation(
     connection: &Connection,
     conversation_id: &str,
 ) -> Result<Option<AiConversation>, String> {
-    let row: Option<(String, String, String, String, String)> = connection
+    let row: Option<(String, String, String, String, String, String)> = connection
         .query_row(
             r#"
-            SELECT id, agent_id, title, created_at, updated_at
+            SELECT id, agent_id, title, created_at, updated_at, mode
             FROM ai_conversations
             WHERE id = ?1
             "#,
@@ -329,13 +352,14 @@ fn get_conversation(
                     row.get(2)?,
                     row.get(3)?,
                     row.get(4)?,
+                    row.get(5)?,
                 ))
             },
         )
         .optional()
         .map_err(|error| error.to_string())?;
 
-    let Some((id, agent_id, title, created_at, updated_at)) = row else {
+    let Some((id, agent_id, title, created_at, updated_at, mode)) = row else {
         return Ok(None);
     };
 
@@ -345,6 +369,7 @@ fn get_conversation(
         agent_id,
         created_at,
         id,
+        mode,
         title,
         updated_at,
     }))

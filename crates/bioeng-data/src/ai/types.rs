@@ -33,6 +33,9 @@ pub struct AiConversation {
     pub context_attachments: Vec<AiContextAttachment>,
     pub created_at: String,
     pub id: String,
+    /// The agent autonomy the user last selected for this conversation:
+    /// `"review"` or `"agentic"`.
+    pub mode: String,
     pub title: String,
     pub transcript_entries: Vec<AiTranscriptEntry>,
     pub updated_at: String,

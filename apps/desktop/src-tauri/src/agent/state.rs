@@ -3,13 +3,22 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 
+use serde_json::Value;
 use tauri::async_runtime::JoinHandle;
 use tokio::sync::oneshot;
 
 use bioeng_agent::Message;
 
-/// Host-side agent state: per-session conversation history + running task, and the
-/// permission requests currently awaiting a webview decision.
+/// The webview's answer to a parked workspace request: the tool result value and
+/// whether it represents an error.
+pub(super) struct WorkspaceReply {
+    pub value: Value,
+    pub is_error: bool,
+}
+
+/// Host-side agent state: per-session conversation history + running task, the
+/// permission requests, and the filesystem requests currently awaiting a webview
+/// decision.
 #[derive(Default)]
 pub struct AgentState {
     inner: Mutex<AgentInner>,
@@ -19,7 +28,9 @@ pub struct AgentState {
 struct AgentInner {
     sessions: HashMap<String, SessionEntry>,
     pending: HashMap<String, PendingPermission>,
+    workspace: HashMap<String, PendingWorkspace>,
     next_permission: u64,
+    next_workspace: u64,
     next_task: u64,
 }
 
@@ -34,6 +45,12 @@ struct PendingPermission {
     session_id: String,
     task_id: u64,
     sender: oneshot::Sender<bool>,
+}
+
+struct PendingWorkspace {
+    session_id: String,
+    task_id: u64,
+    sender: oneshot::Sender<WorkspaceReply>,
 }
 
 impl AgentState {
@@ -151,12 +168,46 @@ impl AgentState {
             let _ = pending.sender.send(allow);
         }
     }
+
+    pub(super) fn park_workspace(
+        &self,
+        session_id: &str,
+        task_id: u64,
+        sender: oneshot::Sender<WorkspaceReply>,
+    ) -> String {
+        let mut inner = self.lock();
+        let id = inner.next_workspace;
+        inner.next_workspace += 1;
+        let request_id = format!("wsreq-{id}");
+        inner.workspace.insert(
+            request_id.clone(),
+            PendingWorkspace {
+                session_id: session_id.to_string(),
+                task_id,
+                sender,
+            },
+        );
+        request_id
+    }
+
+    pub(super) fn resolve_workspace(&self, request_id: &str, reply: WorkspaceReply) {
+        let pending = self.lock().workspace.remove(request_id);
+        if let Some(pending) = pending {
+            let _ = pending.sender.send(reply);
+        }
+    }
 }
 
 fn remove_pending(inner: &mut AgentInner, session_id: &str, task_id: Option<u64>) {
-    inner.pending.retain(|_, pending| {
-        let session_matches = pending.session_id == session_id;
-        let task_matches = task_id.map(|id| pending.task_id == id).unwrap_or(true);
-        !(session_matches && task_matches)
-    });
+    let matches = |pending_session: &str, pending_task: u64| {
+        let session_matches = pending_session == session_id;
+        let task_matches = task_id.map(|id| pending_task == id).unwrap_or(true);
+        session_matches && task_matches
+    };
+    inner
+        .pending
+        .retain(|_, pending| !matches(&pending.session_id, pending.task_id));
+    inner
+        .workspace
+        .retain(|_, pending| !matches(&pending.session_id, pending.task_id));
 }

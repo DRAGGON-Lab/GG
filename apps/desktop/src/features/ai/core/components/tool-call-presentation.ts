@@ -1,6 +1,13 @@
 const TOOL_LABELS: Record<string, string> = {
   skill: "Load skill",
   memory_search: "Search memory",
+  edit: "Edit",
+  read_file: "Read",
+  list_dir: "List files",
+  create_file: "Create file",
+  delete_path: "Delete",
+  move_path: "Move",
+  create_dir: "Create folder",
 };
 
 export type ToolCallState = "done" | "error" | "running";
@@ -91,6 +98,12 @@ function toolInputPreview(input: unknown) {
   const query = stringField(input, "query");
   if (query) {
     return compact(query);
+  }
+
+  const from = stringField(input, "from");
+  const to = stringField(input, "to");
+  if (from && to) {
+    return `${basename(from)} → ${basename(to)}`;
   }
 
   const uri = stringField(input, "uri");

@@ -7,7 +7,10 @@ use bioeng_agent::{
 };
 use bioeng_data::Database;
 
-use super::{agents, conversation, state::AgentState};
+use super::{
+    agents, conversation,
+    state::{AgentState, WorkspaceReply},
+};
 use crate::secrets::types::AiProviderCommandError;
 
 #[tauri::command]
@@ -34,6 +37,7 @@ pub fn agent_send(
     history.push(build_user_message(&request));
 
     let conversation_id = request.conversation_id.clone();
+    let mode = request.mode;
     let task_id = state.start_task(&conversation_id);
     database
         .append_ai_transcript_entry(
@@ -52,7 +56,15 @@ pub fn agent_send(
     let app_for_task = app.clone();
     let task_conversation_id = conversation_id.clone();
     let task = tauri::async_runtime::spawn(async move {
-        conversation::run(app_for_task, task_conversation_id, task_id, agent, history).await;
+        conversation::run(
+            app_for_task,
+            task_conversation_id,
+            task_id,
+            agent,
+            mode,
+            history,
+        )
+        .await;
     });
     state.attach_task(&conversation_id, task_id, task);
     Ok(())
@@ -109,6 +121,25 @@ pub fn agent_respond_permission(
 ) -> Result<(), AiProviderCommandError> {
     let _ = message;
     state.resolve_permission(&request_id, matches!(behavior, PermissionBehavior::Allow));
+    Ok(())
+}
+
+/// The webview's reply to a parked `agent-workspace-request`: the tool result the
+/// agent loop returns to the model, and whether it is an error.
+#[tauri::command]
+pub fn agent_respond_workspace_request(
+    state: State<'_, AgentState>,
+    request_id: String,
+    result: Value,
+    is_error: bool,
+) -> Result<(), AiProviderCommandError> {
+    state.resolve_workspace(
+        &request_id,
+        WorkspaceReply {
+            value: result,
+            is_error,
+        },
+    );
     Ok(())
 }
 

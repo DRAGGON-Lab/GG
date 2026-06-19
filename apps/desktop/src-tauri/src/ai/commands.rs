@@ -75,6 +75,15 @@ pub fn ai_conversation_title_update(
     database.update_ai_conversation_title(&conversation_id, &title)
 }
 
+#[tauri::command]
+pub fn ai_conversation_mode_set(
+    database: State<'_, Database>,
+    conversation_id: String,
+    mode: String,
+) -> Result<Option<AiConversation>, String> {
+    database.set_ai_conversation_mode(&conversation_id, &mode)
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiMemoryUpdateInput {

@@ -66,6 +66,7 @@ import {
   pythonRuntimeStatus,
   type PythonRuntimeStatus,
 } from "@/features/editor/core/python-service";
+import { initWorkspaceBridge } from "@/features/editor/core/workspace-bridge";
 import {
   type EditorAction,
   type EditorDocument,
@@ -857,6 +858,72 @@ export function EditorPage(_: PageRuntime) {
     [writeBuffer],
   );
 
+  const removeDocument = useCallback((key: string) => {
+    setDocumentsByPath((current) => {
+      if (!(key in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  const closePanelForPath = useCallback((key: string) => {
+    for (const record of panelRecordsRef.current.values()) {
+      if (record.path === key) {
+        closePanelRef.current(record.panelId);
+        return;
+      }
+    }
+  }, []);
+
+  // Open a new file's buffer with its content already in it but NOT written to
+  // disk — the agent's `create_file` shows the new file as a proposed change the
+  // user accepts (which saves it) or rejects (which discards this buffer).
+  const openNewFileBuffer = useCallback(
+    async (path: string, content: string) => {
+      const document: EditorDocument = {
+        name: baseName(path),
+        path,
+        text: content,
+        uri: fileUriFor(path),
+      };
+      upsertDocument(document);
+      setActiveKey(path);
+      openDocumentPanel(document, { preview: false });
+      return document;
+    },
+    [openDocumentPanel, upsertDocument],
+  );
+
+  const discardNewFile = useCallback(
+    (path: string) => {
+      closePanelForPath(path);
+      removeDocument(path);
+    },
+    [closePanelForPath, removeDocument],
+  );
+
+  // Close and forget an open document (the agent deleted or moved its file).
+  const closeDocument = useCallback(
+    (pathOrUri: string) => {
+      const document =
+        documentsRef.current[pathOrUri] ??
+        Object.values(documentsRef.current).find(
+          (doc) => doc.uri === pathOrUri || doc.path === pathOrUri,
+        ) ??
+        null;
+      if (!document) {
+        return;
+      }
+      const key = document.path ?? document.uri;
+      closePanelForPath(key);
+      removeDocument(key);
+    },
+    [closePanelForPath, removeDocument],
+  );
+
   const handleSave = useCallback(() => {
     const key = activeKeyRef.current;
     const document = key ? documentsRef.current[key] : null;
@@ -1283,6 +1350,7 @@ export function EditorPage(_: PageRuntime) {
   // document store keys saved buffers by path.
   useEffect(() => {
     initProposedChangesBridge();
+    initWorkspaceBridge();
 
     const resolveDoc = (uriOrPath: string) =>
       getOpenDocument(uriOrPath) ??
@@ -1292,12 +1360,16 @@ export function EditorPage(_: PageRuntime) {
       null;
 
     setEditorWorkspaceDelegates({
+      closeDocument,
+      discardNewFile,
       getOpenDocument: resolveDoc,
+      getWorkspaceRoot: () => workspaceRoot,
       openEditorPath: async (uriOrPath) => {
         await openLocation(uriOrPath);
         return resolveDoc(uriOrPath);
       },
       openLocation,
+      openNewFileBuffer,
       saveDocument,
       updateDocumentText,
     });
@@ -1305,7 +1377,16 @@ export function EditorPage(_: PageRuntime) {
     return () => {
       setEditorWorkspaceDelegates(null);
     };
-  }, [getOpenDocument, openLocation, saveDocument, updateDocumentText]);
+  }, [
+    closeDocument,
+    discardNewFile,
+    getOpenDocument,
+    openLocation,
+    openNewFileBuffer,
+    saveDocument,
+    updateDocumentText,
+    workspaceRoot,
+  ]);
 
   // --- Context value ---
 

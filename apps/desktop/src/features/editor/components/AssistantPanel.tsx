@@ -12,11 +12,15 @@ import {
 /// editor context (current file, cursor line, and the active file's
 /// diagnostics).
 export function AssistantPanel() {
-  const { activeDocument, cursorLine, diagnostics } = useEditorPageContext();
+  const { activeDocument, cursorLine, diagnostics, workspaceRoot } =
+    useEditorPageContext();
 
   const context = useMemo(
-    () => pythonContextAttachments(activeDocument, cursorLine, diagnostics),
-    [activeDocument, cursorLine, diagnostics],
+    () => [
+      ...workspaceContextAttachments(workspaceRoot),
+      ...pythonContextAttachments(activeDocument, cursorLine, diagnostics),
+    ],
+    [activeDocument, cursorLine, diagnostics, workspaceRoot],
   );
   const initialGuide = useMemo(
     () => ({
@@ -38,8 +42,29 @@ export function AssistantPanel() {
       initialTitle="Assistant"
       showContextChips={false}
       showHeader={false}
+      showModeToggle
     />
   );
+}
+
+/// Tell the agent which folder is open so it can resolve the workspace-relative
+/// paths its file tools take. Empty when no workspace is open — the file tools
+/// then report there's nothing to operate on.
+function workspaceContextAttachments(
+  workspaceRoot: string | null,
+): AiContextAttachmentInput[] {
+  if (!workspaceRoot) {
+    return [];
+  }
+  const name =
+    workspaceRoot.split(/[\\/]/).filter(Boolean).pop() ?? workspaceRoot;
+  return [
+    {
+      kind: "workspace",
+      label: `Workspace: ${name}`,
+      payload: { name, root: workspaceRoot },
+    },
+  ];
 }
 
 function pythonContextAttachments(

@@ -1,3 +1,4 @@
+import { AgentMode } from "@protocol";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
@@ -17,6 +18,7 @@ import { AgentTranscript } from "@/features/ai/core/components/AgentTranscript";
 import { useAiConversation } from "@/features/ai/core/useAgentSession";
 import {
   Button,
+  ChevronDown,
   LoaderCircle,
   SendButton,
   SquareSplitHorizontal,
@@ -50,10 +52,35 @@ type AiSurfaceProps = {
   onOpenSettings?: () => void;
   showContextChips?: boolean;
   showHeader?: boolean;
+  /// Show the Review/Agentic autonomy toggle (the editor's workspace assistant,
+  /// where the agent can edit files).
+  showModeToggle?: boolean;
 };
 
 const iconButtonClassName =
   "size-7 rounded-[7px] border-transparent bg-transparent p-0 text-cg-muted hover:bg-cg-surface-hover hover:text-cg-fg";
+
+/// The agent's autonomy modes, in ⇧Tab cycle order. The list drives both the
+/// mode select and the keyboard cycle, so adding a mode is a one-line change.
+const AGENT_MODES: ReadonlyArray<{
+  value: AgentMode;
+  label: string;
+  caption: string;
+}> = [
+  {
+    value: AgentMode.Review,
+    label: "Review",
+    caption: "You review each change",
+  },
+  {
+    value: AgentMode.Agentic,
+    label: "Agentic",
+    caption: "Edits apply automatically",
+  },
+];
+
+const agentModeFor = (mode: AgentMode) =>
+  AGENT_MODES.find((entry) => entry.value === mode) ?? AGENT_MODES[0];
 
 export function AiSurface({
   agentId,
@@ -72,6 +99,7 @@ export function AiSurface({
   onOpenSettings,
   showContextChips = true,
   showHeader = true,
+  showModeToggle = false,
 }: AiSurfaceProps) {
   const {
     agentError,
@@ -80,9 +108,11 @@ export function AiSurface({
     entries,
     interrupt,
     loading,
+    mode,
     permission,
     respondPermission,
     send,
+    setMode,
   } = useAiConversation({
     agentId,
     conversationId,
@@ -161,14 +191,25 @@ export function AiSurface({
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
+  const cycleMode = useCallback(() => {
+    const index = AGENT_MODES.findIndex((entry) => entry.value === mode);
+    const next = AGENT_MODES[(index + 1) % AGENT_MODES.length];
+    setMode(next.value);
+  }, [mode, setMode]);
+
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement>) => {
+      if (showModeToggle && event.key === "Tab" && event.shiftKey) {
+        event.preventDefault();
+        cycleMode();
+        return;
+      }
       if (event.key === "Enter") {
         event.preventDefault();
         submit();
       }
     },
-    [submit],
+    [cycleMode, showModeToggle, submit],
   );
 
   const title = conversation?.title || initialTitle || "AI";
@@ -287,28 +328,77 @@ export function AiSurface({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_34px] items-end gap-2 border-t border-cg-border bg-cg-titlebar p-2.5">
-        <input
-          autoComplete="off"
-          className="h-[34px] min-w-0 rounded-[7px] border border-cg-border bg-cg-editor px-2.5 font-[inherit] text-[12px] leading-none text-cg-fg outline-none placeholder:text-cg-muted focus-visible:border-cg-accent"
-          disabled={loading || setupRequired}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            loading
-              ? "Loading..."
-              : setupRequired
-                ? "Add an API key in Settings"
-                : "Ask anything"
-          }
-          ref={inputRef}
-          value={input}
-        />
-        <SendButton
-          disabled={busy || loading || setupRequired || !input.trim()}
-          onClick={submit}
-        />
+      <div className="border-t border-cg-border bg-cg-titlebar">
+        {showModeToggle ? (
+          <div className="flex items-center justify-between gap-2 px-2.5 pt-2.5">
+            <ModePicker
+              disabled={setupRequired}
+              mode={mode}
+              onChange={setMode}
+            />
+            <span className="min-w-0 truncate text-[10.5px] leading-none text-cg-muted">
+              {agentModeFor(mode).caption}
+            </span>
+          </div>
+        ) : null}
+        <div className="grid grid-cols-[minmax(0,1fr)_34px] items-end gap-2 p-2.5">
+          <input
+            autoComplete="off"
+            className="h-[34px] min-w-0 rounded-[7px] border border-cg-border bg-cg-editor px-2.5 font-[inherit] text-[12px] leading-none text-cg-fg outline-none placeholder:text-cg-muted focus-visible:border-cg-accent"
+            disabled={loading || setupRequired}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              loading
+                ? "Loading..."
+                : setupRequired
+                  ? "Add an API key in Settings"
+                  : "Ask anything"
+            }
+            ref={inputRef}
+            value={input}
+          />
+          <SendButton
+            disabled={busy || loading || setupRequired || !input.trim()}
+            onClick={submit}
+          />
+        </div>
       </div>
+    </div>
+  );
+}
+
+function ModePicker({
+  disabled,
+  mode,
+  onChange,
+}: {
+  disabled?: boolean;
+  mode: AgentMode;
+  onChange: (mode: AgentMode) => void;
+}) {
+  return (
+    <div className="relative inline-flex">
+      <select
+        aria-label="Agent mode"
+        className="h-[26px] min-w-0 cursor-default appearance-none rounded-cg-md border border-cg-border bg-cg-editor py-1 pl-2 pr-[22px] font-[inherit] text-[11px] font-medium leading-none text-cg-fg outline-none transition-[transform,border-color,color] duration-150 ease-out-strong hover:border-cg-border-strong active:scale-[0.97] focus:outline-none focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100"
+        disabled={disabled}
+        onChange={(event) => onChange(event.currentTarget.value as AgentMode)}
+        title="Switch agent mode (⇧Tab to cycle)"
+        value={mode}
+      >
+        {AGENT_MODES.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        aria-hidden="true"
+        className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-cg-muted"
+        size={12}
+        strokeWidth={1.9}
+      />
     </div>
   );
 }

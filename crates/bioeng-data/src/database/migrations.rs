@@ -155,6 +155,15 @@ const MIGRATIONS: &[Migration] = &[
             );
         "#,
     },
+    Migration {
+        version: 8,
+        name: "add_ai_conversation_mode",
+        sql: r#"
+            ALTER TABLE ai_conversations
+                ADD COLUMN mode TEXT NOT NULL DEFAULT 'review'
+                CHECK (mode IN ('review', 'agentic'));
+        "#,
+    },
 ];
 
 pub(super) fn migrate(connection: &mut Connection) -> Result<(), String> {
