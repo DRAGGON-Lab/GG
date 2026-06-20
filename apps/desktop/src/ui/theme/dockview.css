@@ -20,7 +20,7 @@
   --dv-active-sash-transition-duration: 120ms;
   --dv-active-sash-transition-delay: 0ms;
   --dv-spacing-padding: 0;
-  --dv-tab-border-radius: 8px;
+  --dv-tab-border-radius: 9px;
   --dv-sash-border-radius: 0;
   --dv-dropdown-border-radius: 6px;
   --dv-tab-close-icon-size: 12px;
@@ -67,12 +67,21 @@
 
 .dockview-theme-bioeng .dv-tab {
   padding: 0 8px;
-  margin: 3px 1px 0;
+  margin: 0 2px 0 0;
+  overflow: hidden;
   font-family: var(--cg-font-sans);
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
+  border-top-left-radius: 9px;
+  border-top-right-radius: 9px;
   border-bottom-right-radius: 0;
   border-bottom-left-radius: 0;
+}
+
+/* The first tab sits flush in the panel's top-left corner with a square edge,
+   so the panel's own rounded overflow clip shapes it to the exact viewport
+   radius — the tab and the window share one identical corner. */
+.dockview-theme-bioeng .dv-tabs-and-actions-container .dv-tab:first-child {
+  margin-left: 0;
+  border-top-left-radius: 0;
 }
 
 .dockview-theme-bioeng

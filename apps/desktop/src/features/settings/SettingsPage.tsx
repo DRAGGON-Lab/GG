@@ -46,13 +46,22 @@ import {
   ArrowDown,
   ArrowUp,
   BioEngStudioWordmark,
+  Blocks,
+  BookOpen,
   Button,
+  Code2,
   Database,
   Eye,
   EyeOff,
   GripVertical,
+  History,
+  type LucideIcon,
   RotateCcw,
+  Sidebar,
+  SlidersHorizontal,
+  Sparkles,
   useTheme,
+  WandSparkles,
 } from "@/ui";
 
 const settingsFieldClassName =
@@ -67,8 +76,35 @@ const settingsSectionClassName =
 const activityRailButtonClassName =
   "size-7 rounded-[6px] border-transparent bg-transparent p-0 text-cg-muted hover:border-transparent hover:bg-cg-surface-hover hover:text-cg-fg";
 
+type SettingsSectionId =
+  | "providers"
+  | "backup"
+  | "memory"
+  | "skills"
+  | "mcp"
+  | "rail"
+  | "editor"
+  | "advanced";
+
+const settingsSections: readonly {
+  id: SettingsSectionId;
+  label: string;
+  Icon: LucideIcon;
+}[] = [
+  { id: "providers", label: "AI Providers", Icon: Sparkles },
+  { id: "backup", label: "Backup", Icon: History },
+  { id: "memory", label: "AI Memory", Icon: BookOpen },
+  { id: "skills", label: "Skills", Icon: WandSparkles },
+  { id: "mcp", label: "MCP Servers", Icon: Blocks },
+  { id: "rail", label: "Activity Rail", Icon: Sidebar },
+  { id: "editor", label: "Text Editor", Icon: Code2 },
+  { id: "advanced", label: "Advanced", Icon: SlidersHorizontal },
+];
+
 export function SettingsPage({ openPageInNewTab }: PageRuntime) {
   const { resolvedTheme } = useTheme();
+  const [activeSection, setActiveSection] =
+    useState<SettingsSectionId>("providers");
   const [activeActivityMode, setActiveActivityMode] =
     useState<ActivityRailItemId | null>(null);
   const sensors = useSensors(
@@ -168,253 +204,294 @@ export function SettingsPage({ openPageInNewTab }: PageRuntime) {
   }
 
   return (
-    <div className="h-full min-h-0 min-w-0 overflow-auto bg-cg-editor [container-type:inline-size]">
-      <div className="min-w-0 px-[22px] py-[18px] [@container(max-width:520px)]:p-3.5 [@container(max-width:380px)]:p-3">
-        <AiProvidersSettingsSection />
-
-        <BackupSettingsSection />
-
-        <AiMemorySettingsSection />
-
-        <SkillsSettingsSection />
-
-        <McpServersSettingsSection />
-
-        <section
-          className={`${settingsSectionClassName} mb-6`}
-          aria-labelledby="activity-rail"
-        >
-          <header className="flex min-w-0 items-center justify-between gap-3 border-b border-cg-border pb-2.5 [@container(max-width:520px)]:items-start [@container(max-width:520px)]:gap-2 [@container(max-width:520px)]:self-start [@container(max-width:520px)]:flex-col">
-            <h2
-              className="m-0 text-[14px] font-bold leading-none text-cg-fg"
-              id="activity-rail"
+    <div className="grid h-full min-h-0 min-w-0 grid-cols-[212px_minmax(0,1fr)] bg-cg-editor">
+      <nav
+        aria-label="Settings sections"
+        className="flex min-h-0 flex-col overflow-auto border-r border-cg-sidebar-border bg-cg-sidebar px-2 py-2"
+      >
+        <div className="px-1.5 pb-1.5 pt-1 text-[11px] font-bold uppercase leading-none tracking-[0.04em] text-cg-muted">
+          Settings
+        </div>
+        <div className="grid gap-px">
+          {settingsSections.map((section) => (
+            <button
+              aria-current={activeSection === section.id ? "page" : undefined}
+              className="flex min-h-[30px] cursor-default items-center gap-2.5 rounded-[6px] border border-transparent bg-transparent px-2 py-1.5 text-left text-[12.5px] font-[550] leading-none text-cg-sidebar-fg transition-[background-color,color] duration-150 ease-out-strong hover:bg-cg-sidebar-hover hover:text-cg-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cg-focus data-active:border-cg-border data-active:bg-cg-sidebar-hover data-active:font-semibold data-active:text-cg-fg"
+              data-active={activeSection === section.id ? "" : undefined}
+              key={section.id}
+              onClick={() => setActiveSection(section.id)}
+              type="button"
             >
-              Activity Rail
-            </h2>
-            <div className="flex min-w-0 items-center gap-2">
-              <span
-                className="flex-none text-[11px] font-semibold leading-none text-cg-muted [&[data-error]]:text-cg-danger"
-                data-error={error || fontsError ? "" : undefined}
-              >
-                {storageStatus}
-              </span>
-              <Button
-                className="h-7 rounded-[6px] px-2 text-[11.5px]"
-                disabled={defaultActivityRailSelected}
-                onClick={() => {
-                  setActivityRailSettings({
-                    activityOrder: DEFAULT_ACTIVITY_ORDER,
-                    hiddenActivityItems: DEFAULT_HIDDEN_ACTIVITY_ITEMS,
-                  });
-                }}
-                size="none"
-                variant="ghost"
-              >
-                <RotateCcw aria-hidden="true" size={13} strokeWidth={1.8} />
-                Reset
-              </Button>
-            </div>
-          </header>
-
-          <DndContext
-            collisionDetection={closestCenter}
-            onDragCancel={() => setActiveActivityMode(null)}
-            onDragEnd={handleActivityDragEnd}
-            onDragStart={handleActivityDragStart}
-            sensors={sensors}
-          >
-            <SortableContext
-              items={activityOrder}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="grid gap-1.5">
-                {activityOrder.map((activityMode, index) => {
-                  const first = index === 0;
-                  const last = index === activityOrder.length - 1;
-
-                  return (
-                    <SortableActivityOrderRow
-                      activityMode={activityMode}
-                      dragging={activeActivityMode === activityMode}
-                      first={first}
-                      hidden={hiddenActivityItems.includes(activityMode)}
-                      key={activityMode}
-                      last={last}
-                      onMove={moveActivityOrderItem}
-                      onToggleVisibility={toggleActivityVisibility}
-                      rowIndex={index}
-                    />
-                  );
-                })}
-              </div>
-            </SortableContext>
-
-            <DragOverlay>
-              {activeActivityMode && activeActivityItem ? (
-                <ActivityOrderRowContent
-                  Icon={activeActivityItem.Icon}
-                  hidden={hiddenActivityItems.includes(activeActivityMode)}
-                  label={activeActivityItem.label}
-                  overlay
-                />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        </section>
-
-        <section
-          className={settingsSectionClassName}
-          aria-labelledby="text-editor"
-        >
-          <header className="flex min-w-0 items-center justify-between gap-3 border-b border-cg-border pb-2.5 [@container(max-width:520px)]:items-start [@container(max-width:520px)]:gap-2 [@container(max-width:520px)]:self-start [@container(max-width:520px)]:flex-col">
-            <h2
-              className="m-0 text-[14px] font-bold leading-none text-cg-fg"
-              id="text-editor"
-            >
-              Text Editor
-            </h2>
-            <span
-              className="flex-none text-[11px] font-semibold leading-none text-cg-muted [&[data-error]]:text-cg-danger"
-              data-error={error || fontsError ? "" : undefined}
-            >
-              {storageStatus}
-            </span>
-          </header>
-
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3 [@container(max-width:520px)]:gap-2.5">
-            <label className={settingsFieldClassName}>
-              <span>Theme</span>
-              <select
-                aria-label="Text editor theme"
-                className={settingsInputClassName}
-                onChange={(event) => {
-                  setTextEditorSettings({
-                    theme: event.currentTarget.value as TextEditorTheme,
-                  });
-                }}
-                value={textEditorSettings.theme}
-              >
-                {textEditorThemeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className={settingsFieldClassName}>
-              <span>Keymap</span>
-              <select
-                aria-label="Text editor keymap"
-                className={settingsInputClassName}
-                onChange={(event) => {
-                  setTextEditorSettings({
-                    keymap: event.currentTarget.value as TextEditorKeymap,
-                  });
-                }}
-                value={textEditorSettings.keymap}
-              >
-                {textEditorKeymapOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className={settingsFieldClassName}>
-              <span>Font</span>
-              <select
-                aria-label="Text editor font"
-                className={settingsInputClassName}
-                onChange={(event) => {
-                  setTextEditorSettings({
-                    fontFamily: event.currentTarget.value,
-                  });
-                }}
-                value={textEditorSettings.fontFamily}
-              >
-                {selectableFontOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className={`${settingsFieldClassName} col-span-full`}>
-              <span>Default Text Size</span>
-              <div className="grid grid-cols-[minmax(0,1fr)_74px] items-center gap-2.5 [@container(max-width:380px)]:grid-cols-1">
-                <input
-                  aria-label="Text editor font size"
-                  className="w-full accent-cg-accent"
-                  max={TEXT_EDITOR_FONT_SIZE_MAX}
-                  min={TEXT_EDITOR_FONT_SIZE_MIN}
-                  onChange={(event) => setFontSize(event.currentTarget.value)}
-                  step={TEXT_EDITOR_FONT_SIZE_STEP}
-                  type="range"
-                  value={textEditorSettings.fontSize}
-                />
-                <input
-                  aria-label="Text editor font size value"
-                  className={`${settingsInputClassName} text-right [@container(max-width:380px)]:w-[74px] [@container(max-width:380px)]:justify-self-end`}
-                  max={TEXT_EDITOR_FONT_SIZE_MAX}
-                  min={TEXT_EDITOR_FONT_SIZE_MIN}
-                  onChange={(event) => setFontSize(event.currentTarget.value)}
-                  step={TEXT_EDITOR_FONT_SIZE_STEP}
-                  type="number"
-                  value={textEditorSettings.fontSize}
-                />
-              </div>
-            </label>
-          </div>
-
-          <TextEditorPreview
-            resolvedTheme={resolvedTheme}
-            settings={textEditorSettings}
-          />
-        </section>
-
-        <section
-          className={`${settingsSectionClassName} mt-6`}
-          aria-labelledby="advanced"
-        >
-          <header className="flex min-w-0 items-center justify-between gap-3 border-b border-cg-border pb-2.5">
-            <h2
-              className="m-0 text-[14px] font-bold leading-none text-cg-fg"
-              id="advanced"
-            >
-              Advanced
-            </h2>
-          </header>
-
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-[7px] border border-cg-border bg-cg-surface px-3 py-2.5">
-            <div className="grid min-w-0 gap-1.5">
-              <span className="text-[12.5px] font-[600] leading-none text-cg-fg">
-                Database Inspector
-              </span>
-              <span className="text-[11.5px] leading-relaxed text-cg-muted">
-                Browse tables and run SQL against the app's local SQLite
-                database.
-              </span>
-            </div>
-            <Button
-              onClick={() => openPageInNewTab?.("database")}
-              size="sm"
-              variant="subtle"
-            >
-              <Database aria-hidden="true" size={13} strokeWidth={1.9} />
-              Open
-            </Button>
-          </div>
-        </section>
-
-        <footer className="mt-2 grid max-w-[760px] justify-items-center gap-2 border-t border-cg-border pb-2 pt-7">
-          <BioEngStudioWordmark className="h-12 w-auto text-cg-muted" />
-          <p className="m-0 text-[11.5px] leading-none text-cg-muted">
+              <section.Icon
+                aria-hidden="true"
+                className="shrink-0"
+                size={16}
+                strokeWidth={1.8}
+              />
+              <span className="min-w-0 truncate">{section.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="min-h-3 flex-1" aria-hidden="true" />
+        <div className="grid justify-items-start gap-1.5 px-1 pb-1">
+          <BioEngStudioWordmark className="h-9 w-auto text-cg-muted" />
+          <p className="m-0 text-[10.5px] leading-none text-cg-muted">
             The Biological Engineering IDE
           </p>
-        </footer>
+        </div>
+      </nav>
+
+      <div className="min-w-0 overflow-auto bg-cg-editor [container-type:inline-size]">
+        <div className="min-w-0 px-[22px] py-[18px] [@container(max-width:520px)]:p-3.5 [@container(max-width:380px)]:p-3">
+          {activeSection === "providers" && <AiProvidersSettingsSection />}
+
+          {activeSection === "backup" && <BackupSettingsSection />}
+
+          {activeSection === "memory" && <AiMemorySettingsSection />}
+
+          {activeSection === "skills" && <SkillsSettingsSection />}
+
+          {activeSection === "mcp" && <McpServersSettingsSection />}
+
+          {activeSection === "rail" && (
+            <section
+              className={settingsSectionClassName}
+              aria-labelledby="activity-rail"
+            >
+              <header className="flex min-w-0 items-center justify-between gap-3 border-b border-cg-border pb-2.5 [@container(max-width:520px)]:items-start [@container(max-width:520px)]:gap-2 [@container(max-width:520px)]:self-start [@container(max-width:520px)]:flex-col">
+                <h2
+                  className="m-0 text-[14px] font-bold leading-none text-cg-fg"
+                  id="activity-rail"
+                >
+                  Activity Rail
+                </h2>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="flex-none text-[11px] font-semibold leading-none text-cg-muted [&[data-error]]:text-cg-danger"
+                    data-error={error || fontsError ? "" : undefined}
+                  >
+                    {storageStatus}
+                  </span>
+                  <Button
+                    className="h-7 rounded-[6px] px-2 text-[11.5px]"
+                    disabled={defaultActivityRailSelected}
+                    onClick={() => {
+                      setActivityRailSettings({
+                        activityOrder: DEFAULT_ACTIVITY_ORDER,
+                        hiddenActivityItems: DEFAULT_HIDDEN_ACTIVITY_ITEMS,
+                      });
+                    }}
+                    size="none"
+                    variant="ghost"
+                  >
+                    <RotateCcw aria-hidden="true" size={13} strokeWidth={1.8} />
+                    Reset
+                  </Button>
+                </div>
+              </header>
+
+              <DndContext
+                collisionDetection={closestCenter}
+                onDragCancel={() => setActiveActivityMode(null)}
+                onDragEnd={handleActivityDragEnd}
+                onDragStart={handleActivityDragStart}
+                sensors={sensors}
+              >
+                <SortableContext
+                  items={activityOrder}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="grid gap-1.5">
+                    {activityOrder.map((activityMode, index) => {
+                      const first = index === 0;
+                      const last = index === activityOrder.length - 1;
+
+                      return (
+                        <SortableActivityOrderRow
+                          activityMode={activityMode}
+                          dragging={activeActivityMode === activityMode}
+                          first={first}
+                          hidden={hiddenActivityItems.includes(activityMode)}
+                          key={activityMode}
+                          last={last}
+                          onMove={moveActivityOrderItem}
+                          onToggleVisibility={toggleActivityVisibility}
+                          rowIndex={index}
+                        />
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+
+                <DragOverlay>
+                  {activeActivityMode && activeActivityItem ? (
+                    <ActivityOrderRowContent
+                      Icon={activeActivityItem.Icon}
+                      hidden={hiddenActivityItems.includes(activeActivityMode)}
+                      label={activeActivityItem.label}
+                      overlay
+                    />
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
+            </section>
+          )}
+
+          {activeSection === "editor" && (
+            <section
+              className={settingsSectionClassName}
+              aria-labelledby="text-editor"
+            >
+              <header className="flex min-w-0 items-center justify-between gap-3 border-b border-cg-border pb-2.5 [@container(max-width:520px)]:items-start [@container(max-width:520px)]:gap-2 [@container(max-width:520px)]:self-start [@container(max-width:520px)]:flex-col">
+                <h2
+                  className="m-0 text-[14px] font-bold leading-none text-cg-fg"
+                  id="text-editor"
+                >
+                  Text Editor
+                </h2>
+                <span
+                  className="flex-none text-[11px] font-semibold leading-none text-cg-muted [&[data-error]]:text-cg-danger"
+                  data-error={error || fontsError ? "" : undefined}
+                >
+                  {storageStatus}
+                </span>
+              </header>
+
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3 [@container(max-width:520px)]:gap-2.5">
+                <label className={settingsFieldClassName}>
+                  <span>Theme</span>
+                  <select
+                    aria-label="Text editor theme"
+                    className={settingsInputClassName}
+                    onChange={(event) => {
+                      setTextEditorSettings({
+                        theme: event.currentTarget.value as TextEditorTheme,
+                      });
+                    }}
+                    value={textEditorSettings.theme}
+                  >
+                    {textEditorThemeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={settingsFieldClassName}>
+                  <span>Keymap</span>
+                  <select
+                    aria-label="Text editor keymap"
+                    className={settingsInputClassName}
+                    onChange={(event) => {
+                      setTextEditorSettings({
+                        keymap: event.currentTarget.value as TextEditorKeymap,
+                      });
+                    }}
+                    value={textEditorSettings.keymap}
+                  >
+                    {textEditorKeymapOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={settingsFieldClassName}>
+                  <span>Font</span>
+                  <select
+                    aria-label="Text editor font"
+                    className={settingsInputClassName}
+                    onChange={(event) => {
+                      setTextEditorSettings({
+                        fontFamily: event.currentTarget.value,
+                      });
+                    }}
+                    value={textEditorSettings.fontFamily}
+                  >
+                    {selectableFontOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={`${settingsFieldClassName} col-span-full`}>
+                  <span>Default Text Size</span>
+                  <div className="grid grid-cols-[minmax(0,1fr)_74px] items-center gap-2.5 [@container(max-width:380px)]:grid-cols-1">
+                    <input
+                      aria-label="Text editor font size"
+                      className="w-full accent-cg-accent"
+                      max={TEXT_EDITOR_FONT_SIZE_MAX}
+                      min={TEXT_EDITOR_FONT_SIZE_MIN}
+                      onChange={(event) =>
+                        setFontSize(event.currentTarget.value)
+                      }
+                      step={TEXT_EDITOR_FONT_SIZE_STEP}
+                      type="range"
+                      value={textEditorSettings.fontSize}
+                    />
+                    <input
+                      aria-label="Text editor font size value"
+                      className={`${settingsInputClassName} text-right [@container(max-width:380px)]:w-[74px] [@container(max-width:380px)]:justify-self-end`}
+                      max={TEXT_EDITOR_FONT_SIZE_MAX}
+                      min={TEXT_EDITOR_FONT_SIZE_MIN}
+                      onChange={(event) =>
+                        setFontSize(event.currentTarget.value)
+                      }
+                      step={TEXT_EDITOR_FONT_SIZE_STEP}
+                      type="number"
+                      value={textEditorSettings.fontSize}
+                    />
+                  </div>
+                </label>
+              </div>
+
+              <TextEditorPreview
+                resolvedTheme={resolvedTheme}
+                settings={textEditorSettings}
+              />
+            </section>
+          )}
+
+          {activeSection === "advanced" && (
+            <section
+              className={settingsSectionClassName}
+              aria-labelledby="advanced"
+            >
+              <header className="flex min-w-0 items-center justify-between gap-3 border-b border-cg-border pb-2.5">
+                <h2
+                  className="m-0 text-[14px] font-bold leading-none text-cg-fg"
+                  id="advanced"
+                >
+                  Advanced
+                </h2>
+              </header>
+
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-[7px] border border-cg-border bg-cg-surface px-3 py-2.5">
+                <div className="grid min-w-0 gap-1.5">
+                  <span className="text-[12.5px] font-[600] leading-none text-cg-fg">
+                    Database Inspector
+                  </span>
+                  <span className="text-[11.5px] leading-relaxed text-cg-muted">
+                    Browse tables and run SQL against the app's local SQLite
+                    database.
+                  </span>
+                </div>
+                <Button
+                  onClick={() => openPageInNewTab?.("database")}
+                  size="sm"
+                  variant="subtle"
+                >
+                  <Database aria-hidden="true" size={13} strokeWidth={1.9} />
+                  Open
+                </Button>
+              </div>
+            </section>
+          )}
+        </div>
       </div>
     </div>
   );

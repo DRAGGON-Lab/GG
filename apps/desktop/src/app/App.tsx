@@ -257,10 +257,10 @@ function App() {
   }
 
   return (
-    <main className="grid h-screen w-screen grid-rows-[46px_minmax(0,1fr)] overflow-hidden bg-cg-bg text-cg-fg [--app-activitybar-width:46px]">
+    <main className="grid h-screen w-screen grid-rows-[46px_minmax(0,1fr)] overflow-hidden bg-cg-chrome text-cg-fg [--app-activitybar-width:50px]">
       <TopBar onOpenCommandPalette={openCommandPalette} />
 
-      <div className="app-main grid min-h-0 min-w-0 grid-cols-[var(--app-activitybar-width)_minmax(0,1fr)] bg-cg-editor">
+      <div className="app-main grid min-h-0 min-w-0 grid-cols-[var(--app-activitybar-width)_minmax(0,1fr)] bg-cg-chrome">
         <ActivityBar
           activityMode={activityMode}
           onNavigateToActivity={navigateToActivity}
@@ -269,12 +269,14 @@ function App() {
           onPreloadSettings={preloadSettings}
         />
 
-        <div className="relative col-start-2 grid min-h-0 min-w-0">
+        <div className="relative col-start-2 min-h-0 min-w-0 py-2 pr-2">
           {settingsLoading ? null : (
-            <Workbench
-              controller={workbenchController}
-              resolvedTheme={resolvedTheme}
-            />
+            <div className="grid h-full w-full min-h-0 min-w-0 overflow-hidden rounded-[12px] border border-cg-border bg-cg-editor shadow-[0_1px_2px_rgb(0_0_0/0.16),0_10px_30px_rgb(0_0_0/0.12)]">
+              <Workbench
+                controller={workbenchController}
+                resolvedTheme={resolvedTheme}
+              />
+            </div>
           )}
         </div>
       </div>

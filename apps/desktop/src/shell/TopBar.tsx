@@ -6,7 +6,7 @@ type TopBarProps = {
 
 export function TopBar({ onOpenCommandPalette }: TopBarProps) {
   return (
-    <header className="relative border-b border-cg-border bg-cg-titlebar">
+    <header className="relative bg-cg-chrome">
       <div
         aria-hidden="true"
         className="absolute inset-0"
