@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 
+import { OutputDisplay } from "@/features/editor/components/artifacts/OutputDisplay";
 import { useEditorPageContext } from "@/features/editor/editor-page-context";
 import { Button, Play } from "@/ui";
 
@@ -61,13 +62,8 @@ export function OutputPanel() {
         {run.lines.length ? (
           <pre className="m-0 min-w-0 whitespace-pre-wrap font-mono text-[12px] leading-[1.45]">
             {run.lines.map((line) =>
-              line.stream === "image" ? (
-                <img
-                  alt="Figure"
-                  className="my-1.5 block max-w-full rounded-[6px] border border-cg-border bg-white"
-                  key={line.id}
-                  src={line.text}
-                />
+              line.stream === "display" && line.display ? (
+                <OutputDisplay display={line.display} key={line.id} />
               ) : (
                 <span
                   className={

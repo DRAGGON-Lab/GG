@@ -32,6 +32,7 @@ export {
   Eye,
   EyeOff,
   Dices,
+  Dna,
   FileText,
   Folder,
   FolderOpen,

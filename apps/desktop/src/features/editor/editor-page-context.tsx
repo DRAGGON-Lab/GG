@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 
+import type { DisplayData } from "@/features/editor/components/artifacts/display";
 import type { CheckpointSummary } from "@/features/editor/core/history-service";
 import type { LspDiagnostic } from "@/features/editor/core/python-service";
 import type { TextEditorSettings } from "@/features/settings";
@@ -22,12 +23,13 @@ export type EditorPosition = {
 
 export type RunStatus = "idle" | "running" | "done";
 
-/// One line of run output, tagged with its stream. For an "image" line, `text`
-/// is a PNG data URL captured from a matplotlib figure.
+/// One line of run output, tagged with its stream. For a "display" line, `text`
+/// is empty and the parsed MIME bundle is on `display`.
 export type OutputLine = {
   id: number;
-  stream: "stdout" | "stderr" | "image";
+  stream: "stdout" | "stderr" | "display";
   text: string;
+  display?: DisplayData;
 };
 
 /// Live run console state, shared between the toolbar Run button and the

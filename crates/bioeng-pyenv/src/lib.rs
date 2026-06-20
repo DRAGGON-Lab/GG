@@ -223,9 +223,11 @@ where
 /// [`run_script_with_capture`].
 pub const RUNNER_SOURCE: &str = include_str!("bioeng_runner.py");
 
-/// Prefix the run wrapper prints on stdout immediately before a figure's
-/// base64 PNG data URL. A line starting with this marker is an image, not text.
-pub const FIGURE_SENTINEL: &str = "\u{1f}BIOENG_FIGURE\u{1f}";
+/// Prefix the run wrapper prints on stdout before a rich display's JSON MIME
+/// bundle. A line starting with this marker is a displayable object (figure,
+/// table, HTML, SVG, …), not text. The wrapper produces these from matplotlib
+/// figures and from `display(obj)` via the object's standard rich-repr methods.
+pub const DISPLAY_SENTINEL: &str = "\u{1f}BIOENG_DISPLAY\u{1f}";
 
 /// Run a Python script with the given interpreter, streaming each stdout and
 /// stderr line to `on_line` as it arrives, and resolve to the process exit
@@ -249,9 +251,10 @@ where
     stream_command(command, on_line).await
 }
 
-/// Run a Python script through the figure-capturing wrapper at `runner_path`
+/// Run a Python script through the output-capturing wrapper at `runner_path`
 /// (whose contents are [`RUNNER_SOURCE`]). Identical to [`run_script`] except
-/// matplotlib figures surface as stdout lines prefixed with [`FIGURE_SENTINEL`].
+/// rich output (matplotlib figures, `display(obj)`) surfaces as stdout lines
+/// prefixed with [`DISPLAY_SENTINEL`], each carrying a JSON MIME bundle.
 pub async fn run_script_with_capture<F>(
     python: &Path,
     runner_path: &Path,
@@ -308,6 +311,90 @@ fn uv_command(uv: &Path, workspace_root: &Path) -> Command {
     command
 }
 
+/// The interpreter's `(major, minor)` version, read by running it. None when it
+/// can't be launched or its output doesn't parse.
+async fn interpreter_minor(python: &Path) -> Option<(u32, u32)> {
+    let output = Command::new(python)
+        .arg("-c")
+        .arg("import sys; print(sys.version_info.major, sys.version_info.minor)")
+        .stdin(Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut parts = text.split_whitespace();
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    Some((major, minor))
+}
+
+/// Bound an open-ended `requires-python` in the workspace manifest to the bundled
+/// interpreter's minor version (e.g. `>=3.12,<3.13`).
+///
+/// uv builds a *universal* lock that must satisfy every Python in
+/// `requires-python`. Left open-ended (uv init writes `>=3.12`), it also has to
+/// resolve for future Pythons where some dependencies have no compatible release
+/// — e.g. on 3.14 only newer matplotlib ships wheels, and that pulls `pyparsing>=3`,
+/// which conflicts with `loica -> tyto -> pyparsing<3` and fails resolution. The
+/// app ships and runs exactly one interpreter, so locking for any other version
+/// is both meaningless and the source of these phantom conflicts.
+///
+/// Best-effort and conservative: only an unbounded spec is tightened; an explicit
+/// range the user wrote is left untouched. Any read/parse failure is left for uv
+/// to surface.
+async fn bound_requires_python(workspace_root: &Path, base_python: &Path) {
+    let path = workspace_root.join("pyproject.toml");
+    let Ok(contents) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let Some((major, minor)) = interpreter_minor(base_python).await else {
+        return;
+    };
+    let bound = format!(">={major}.{minor},<{major}.{}", minor + 1);
+    if let Some(updated) = rewrite_requires_python(&contents, &bound) {
+        let _ = std::fs::write(&path, updated);
+    }
+}
+
+/// Replace an unbounded `requires-python` value with `bound`, returning the new
+/// file contents. None when there's nothing to change: no such field, or a spec
+/// that already carries an upper bound (`<`, `==`, or `~=`).
+fn rewrite_requires_python(contents: &str, bound: &str) -> Option<String> {
+    let mut result = String::with_capacity(contents.len() + bound.len());
+    let mut changed = false;
+    for line in contents.lines() {
+        let trimmed = line.trim_start();
+        if !changed && trimmed.starts_with("requires-python") {
+            if let Some(value) = field_string_value(trimmed) {
+                let already_bounded =
+                    value.contains('<') || value.contains("==") || value.contains("~=");
+                if !already_bounded {
+                    let indent = &line[..line.len() - trimmed.len()];
+                    result.push_str(indent);
+                    result.push_str(&format!("requires-python = \"{bound}\""));
+                    result.push('\n');
+                    changed = true;
+                    continue;
+                }
+            }
+        }
+        result.push_str(line);
+        result.push('\n');
+    }
+    changed.then_some(result)
+}
+
+/// The double-quoted value from a `key = "value"` TOML line, ignoring anything
+/// after the closing quote (e.g. a comment).
+fn field_string_value(line: &str) -> Option<&str> {
+    let start = line.find('"')? + 1;
+    let end = line[start..].find('"')? + start;
+    Some(&line[start..end])
+}
+
 /// Initialize the workspace as a uv project (creating `pyproject.toml` if
 /// absent) and sync its `.venv` and `uv.lock` from `base_python`, streaming
 /// uv's progress to `on_line`. Idempotent: an existing project is left intact
@@ -347,6 +434,10 @@ where
         }
     }
 
+    // Keep the lock scoped to the one interpreter the app runs, so resolution
+    // never has to satisfy a future Python where the dependency set conflicts.
+    bound_requires_python(workspace_root, base_python).await;
+
     // `uv sync` creates the `.venv` and writes `uv.lock` from the manifest.
     let mut sync = uv_command(uv, workspace_root);
     sync.arg("sync")
@@ -359,9 +450,12 @@ where
 }
 
 /// Add `packages` to the workspace project, updating `pyproject.toml`,
-/// `uv.lock`, and the `.venv`. Streams uv's progress to `on_line`.
+/// `uv.lock`, and the `.venv`. Streams uv's progress to `on_line`. `base_python`
+/// is the bundled interpreter, used to keep `requires-python` bound to the one
+/// Python the app runs before resolving (see [`bound_requires_python`]).
 pub async fn install_packages<F>(
     uv: &Path,
+    base_python: &Path,
     workspace_root: &Path,
     packages: &[String],
     on_line: F,
@@ -369,6 +463,8 @@ pub async fn install_packages<F>(
 where
     F: Fn(OutputLine) + Send + Sync + 'static,
 {
+    bound_requires_python(workspace_root, base_python).await;
+
     let mut command = uv_command(uv, workspace_root);
     command.arg("add").arg("--project").arg(workspace_root);
     for package in packages {
@@ -611,6 +707,32 @@ mod tests {
             requirement_name("uvicorn[standard]==0.30; python_version>'3.8'"),
             "uvicorn"
         );
+    }
+
+    #[test]
+    fn bounds_open_ended_requires_python() {
+        let manifest =
+            "[project]\nname = \"demo\"\nrequires-python = \">=3.12\"\ndependencies = []\n";
+        let updated = rewrite_requires_python(manifest, ">=3.12,<3.13").expect("should rewrite");
+        assert!(updated.contains("requires-python = \">=3.12,<3.13\""));
+        assert!(updated.contains("name = \"demo\""));
+        assert!(updated.contains("dependencies = []"));
+    }
+
+    #[test]
+    fn leaves_already_bounded_requires_python() {
+        // An explicit upper bound, an exact pin, and a compatible-release pin are
+        // all left untouched.
+        for spec in [">=3.12,<3.13", "==3.12.*", "~=3.12"] {
+            let manifest = format!("[project]\nrequires-python = \"{spec}\"\n");
+            assert_eq!(rewrite_requires_python(&manifest, ">=3.12,<3.13"), None);
+        }
+    }
+
+    #[test]
+    fn ignores_manifest_without_requires_python() {
+        let manifest = "[project]\nname = \"demo\"\ndependencies = []\n";
+        assert_eq!(rewrite_requires_python(manifest, ">=3.12,<3.13"), None);
     }
 
     #[test]

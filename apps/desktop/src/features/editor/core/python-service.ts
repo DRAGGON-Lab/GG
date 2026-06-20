@@ -94,11 +94,12 @@ export type PythonRuntimeStatus = {
   version: string | null;
 };
 
-/// A line of run output. `stream` is "image" when `line` is a PNG data URL
-/// captured from a matplotlib figure rather than text.
+/// A line of run output. `stream` is "display" when `line` is the JSON MIME
+/// bundle of a rich display (matplotlib figure, `display(obj)`); otherwise it's
+/// plain stdout/stderr text.
 export type PythonRunOutput = {
   runId: number;
-  stream: "stdout" | "stderr" | "image";
+  stream: "stdout" | "stderr" | "display";
   line: string;
 };
 

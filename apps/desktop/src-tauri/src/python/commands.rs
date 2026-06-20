@@ -60,11 +60,12 @@ fn line_emitter(
 /// to the final exit code. When `workspace_root` has a `.venv`, the script runs
 /// with that interpreter; otherwise the bundled base interpreter is used.
 ///
-/// The script runs through a wrapper that captures matplotlib figures, so
-/// figures arrive as `stream: "image"` events carrying a PNG data URL.
+/// The script runs through a wrapper that captures rich output (matplotlib
+/// figures and `display(obj)`), which arrives as `stream: "display"` events
+/// carrying a JSON MIME bundle.
 ///
 /// Emitted event `python-run-output` payload (camelCase):
-///   `{ runId: number, stream: "stdout" | "stderr" | "image", line: string }`
+///   `{ runId, stream: "stdout" | "stderr" | "display", line }`
 #[tauri::command]
 pub async fn python_run_script(
     app: AppHandle,
@@ -112,11 +113,11 @@ pub async fn python_run_script(
 
     let emit_app = app.clone();
     let on_line = move |output: OutputLine| {
-        // A stdout line carrying the figure sentinel is an image data URL, not
-        // text; everything else flows through as its own stream.
+        // A stdout line carrying the display sentinel is a rich MIME bundle, not
+        // text. Everything else flows through as its own stream.
         let (stream, line) = match output.stream {
-            Stream::Stdout => match output.line.strip_prefix(bioeng_pyenv::FIGURE_SENTINEL) {
-                Some(data_url) => ("image", data_url.to_string()),
+            Stream::Stdout => match output.line.strip_prefix(bioeng_pyenv::DISPLAY_SENTINEL) {
+                Some(json) => ("display", json.to_string()),
                 None => ("stdout", output.line),
             },
             Stream::Stderr => ("stderr", output.line),
@@ -197,10 +198,20 @@ pub async fn python_packages_install(
 ) -> Result<RunResult, String> {
     let state = app.state::<PythonState>();
     let uv = require_uv(&state)?;
+    let base_python = state
+        .interpreter()
+        .cloned()
+        .ok_or_else(|| "Python runtime interpreter not found".to_string())?;
     let run_id = next_run_id();
     let on_line = line_emitter(&app, "python-env-output", run_id);
-    let exit_code =
-        bioeng_pyenv::install_packages(&uv, Path::new(&workspace_root), &packages, on_line).await?;
+    let exit_code = bioeng_pyenv::install_packages(
+        &uv,
+        &base_python,
+        Path::new(&workspace_root),
+        &packages,
+        on_line,
+    )
+    .await?;
     Ok(RunResult { run_id, exit_code })
 }
 

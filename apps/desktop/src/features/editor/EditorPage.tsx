@@ -29,6 +29,7 @@ import {
   useState,
 } from "react";
 
+import { parseDisplay } from "@/features/editor/components/artifacts/display";
 import { AssistantPanel } from "@/features/editor/components/AssistantPanel";
 import { CheckpointDiffTab } from "@/features/editor/components/CheckpointDiffTab";
 import { CheckpointReview } from "@/features/editor/components/CheckpointReview";
@@ -541,6 +542,7 @@ export function EditorPage(_: PageRuntime) {
 
       setActiveKey(null);
       setEditorPanelParams(api, record);
+      syncEditorGroupHeader(api, panelRecordsRef.current);
       panel.api.setActive();
     },
     [setEditorPanelParams],
@@ -596,6 +598,7 @@ export function EditorPage(_: PageRuntime) {
         }
 
         setEditorPanelParams(api, emptyRecord);
+        syncEditorGroupHeader(api, panelRecordsRef.current);
         api.getPanel(emptyRecord.panelId)?.api.setActive();
         return;
       }
@@ -649,6 +652,7 @@ export function EditorPage(_: PageRuntime) {
         previewPanelIdRef.current = panelId;
       }
 
+      syncEditorGroupHeader(api, panelRecordsRef.current);
       api.getPanel(panelId)?.api.setActive();
     },
     [persistEditorPanel, setEditorPanelParams],
@@ -938,9 +942,21 @@ export function EditorPage(_: PageRuntime) {
   // --- Run ---
 
   const appendOutput = useCallback(
-    (stream: "stdout" | "stderr" | "image", text: string) => {
+    (stream: "stdout" | "stderr" | "display", text: string) => {
       outputCounterRef.current += 1;
       const id = outputCounterRef.current;
+      // A display line carries a JSON MIME bundle, not display text; parse it and
+      // attach the result. A malformed bundle falls back to a stderr line.
+      if (stream === "display") {
+        const display = parseDisplay(text);
+        setOutputLines((lines) => [
+          ...lines,
+          display
+            ? { id, stream, text: "", display }
+            : { id, stream: "stderr", text },
+        ]);
+        return;
+      }
       setOutputLines((lines) => [...lines, { id, stream, text }]);
     },
     [],
@@ -1472,6 +1488,7 @@ export function EditorPage(_: PageRuntime) {
         path: null,
       });
       editorPanel.api.setActive();
+      syncEditorGroupHeader(api, panelRecordsRef.current);
 
       api.onDidRemovePanel((panel) => {
         panelRecordsRef.current.delete(panel.id);
@@ -1481,6 +1498,7 @@ export function EditorPage(_: PageRuntime) {
         if (panel.id === EDITOR_DOCK_PANEL_IDS.review) {
           setReviewOpen(false);
         }
+        syncEditorGroupHeader(api, panelRecordsRef.current);
       });
 
       api.onDidActivePanelChange((panel) => {
@@ -1836,6 +1854,23 @@ function getEditorReferencePanel(api: DockviewApi): IDockviewPanel | undefined {
     const params = panel.params as EditorDockPanelParams | undefined;
     return params?.kind === "editor";
   });
+}
+
+/// Hide the editor group's tab strip while it holds only the wordmark
+/// placeholder, so the default empty screen carries no tab; reveal it once a
+/// document occupies the group.
+function syncEditorGroupHeader(
+  api: DockviewApi,
+  records: Map<string, EditorPanelRecord>,
+) {
+  const editorPanel = getEditorReferencePanel(api);
+
+  if (!editorPanel) {
+    return;
+  }
+
+  editorPanel.api.group.header.hidden =
+    getOpenEditorPanelRecords(records).length === 0;
 }
 
 function getNewEditorPanelPosition(

@@ -1,3 +1,4 @@
+import { exists, writeTextFile } from "@tauri-apps/plugin-fs";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import {
@@ -16,11 +17,195 @@ import {
   Blocks,
   Button,
   ChevronRight,
+  Dna,
   LoaderCircle,
   Plus,
   RefreshCw,
   Trash2,
 } from "@/ui";
+
+/// The tool stack from the synthetic-biology DBTL workflow: design (loica,
+/// sbol3, sbol-utilities), build (pudupy → Opentrons), and test/learn
+/// (pyflapjack). Installed together by "Set up synthetic biology project".
+const SYNBIO_PACKAGES = [
+  "loica",
+  "sbol3",
+  "sbol-utilities",
+  "pudupy",
+  "pyflapjack",
+];
+
+/// Runnable starter scripts dropped into a new synthetic-biology project, one
+/// per DBTL workflow. They use only the standard display protocol — `plt.show()`
+/// for figures and `display(obj)` for tables and plate-shaped DataFrames — so
+/// they run identically in Bio Eng Studio and any Jupyter environment, with no
+/// app-specific import. Existing files of the same name are never overwritten.
+const SYNBIO_STARTERS: Record<string, string> = {
+  "dbtl_01_design_simulate.py": `"""Design + simulate stage (DBTL design-build-test-learn, simulated build).
+
+A three-node repressilator — the genetic oscillator LOICA generates from NOT-gate
+parameters. The dynamics are integrated directly so this runs without external
+services; swap in \`loica\` to design from characterized parts. Output renders
+through the standard display protocol — \`plt.show()\` for the figure and
+\`display(df)\` for the table — so the same code runs in any Jupyter environment.
+"""
+
+try:
+    display  # Provided by Bio Eng Studio and Jupyter as a builtin.
+except NameError:
+    from IPython.display import display
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from scipy.integrate import odeint
+from scipy.signal import find_peaks
+
+
+def repressilator(state, _t, alpha=216.0, hill=2.0, beta=0.2):
+    mrna, protein = state[:3], state[3:]
+    repressor = protein[[2, 0, 1]]
+    d_mrna = -mrna + alpha / (1.0 + repressor**hill)
+    d_protein = -beta * (protein - mrna)
+    return np.concatenate([d_mrna, d_protein])
+
+
+time = np.linspace(0, 60, 2000)
+solution = odeint(repressilator, [0.2, 0.1, 0.3, 0.1, 0.4, 0.2], time)
+proteins = solution[:, 3:]
+labels = ["CFP (cI)", "GFP (LacI)", "RFP (TetR)"]
+
+figure, axes = plt.subplots(figsize=(7, 3))
+for index, label in enumerate(labels):
+    axes.plot(time, proteins[:, index], label=label)
+axes.set(xlabel="time (a.u.)", ylabel="reporter (a.u.)", title="Repressilator")
+axes.legend(loc="upper right", fontsize=8)
+plt.show()
+
+# A functional oscillator shows more than two peaks per reporter.
+peaks = []
+for index, label in enumerate(labels):
+    found, _ = find_peaks(proteins[:, index], prominence=proteins[:, index].max() * 0.1)
+    peaks.append(
+        {
+            "reporter": label,
+            "peaks": len(found),
+            "functional": "yes" if len(found) > 2 else "no",
+        }
+    )
+display(pd.DataFrame(peaks))
+`,
+  "dbtl_02_manual_build.py": `"""Build (manual) + learn stage (DBTL with manual build).
+
+Compare constitutive GFP expression across degradation tags. Software automates
+design and learn; the build (assembly, transformation, plating) is manual.
+Output renders through the standard display protocol, so the same script runs in
+any Jupyter environment.
+"""
+
+try:
+    display  # Provided by Bio Eng Studio and Jupyter as a builtin.
+except NameError:
+    from IPython.display import display
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+reporters = pd.DataFrame(
+    [
+        {"id": "GD0004", "CDS": "sfGFP", "tag": "dum0", "terminator": "B0015"},
+        {"id": "GD0005", "CDS": "sfGFP", "tag": "dum33", "terminator": "B0015"},
+        {"id": "GD0006", "CDS": "sfGFP", "tag": "M0050", "terminator": "B0015"},
+        {"id": "GD0007", "CDS": "GFPmut3", "tag": "dum0", "terminator": "B0015"},
+        {"id": "GD0008", "CDS": "GFPmut3", "tag": "dum33", "terminator": "B0015"},
+        {"id": "GD0009", "CDS": "GFPmut3", "tag": "M0050", "terminator": "B0015"},
+    ]
+)
+display(reporters)
+
+# A plate-shaped DataFrame (rows A-H, cols 1-12) renders as a 96-well map; in a
+# notebook it shows as a table. Each Reporter occupies 4 replicate wells.
+plate = pd.DataFrame(index=list("ABCDEFGH"), columns=range(1, 13), dtype=object)
+for row, reporter_id in zip("ABCDEF", reporters["id"]):
+    for col in range(1, 5):
+        plate.loc[row, col] = reporter_id
+display(plate)
+
+# The M0050 degradation tag depresses expression and delays growth.
+tag_effect = {"dum0": 1.0, "dum33": 0.95, "M0050": 0.45}
+reporters["expression"] = [
+    tag_effect[tag] * (1.1 if cds == "sfGFP" else 1.0)
+    for cds, tag in zip(reporters["CDS"], reporters["tag"])
+]
+figure, axes = plt.subplots(figsize=(7, 3))
+axes.bar(reporters["id"], reporters["expression"], color="#128a3e")
+axes.set(ylabel="mean expression rate (MEFL)", title="Degradation-tag effect (N=3)")
+plt.setp(axes.get_xticklabels(), rotation=30, ha="right", fontsize=8)
+plt.show()
+`,
+  "dbtl_03_automated_build.py": `"""Build (automated) + learn stage (DBTL with automated build).
+
+Six repressible promoters as constitutive Sources driving sfGFP, assembled by
+Golden Gate on an Opentrons OT-2 via PUDU. Output renders through the standard
+display protocol; swap the tables for live \`pudupy\` protocol generation to
+drive the robot.
+"""
+
+try:
+    display  # Provided by Bio Eng Studio and Jupyter as a builtin.
+except NameError:
+    from IPython.display import display
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+promoters = ["GVP0008", "GVP0010", "GVP0012", "GVP0013", "GVP0016", "GVP0017"]
+devices = pd.DataFrame(
+    [
+        {
+            "device": f"GVD{11 + index:04d}",
+            "promoter": promoter,
+            "rbs": "B0034",
+            "cds": "sfGFP",
+            "terminator": "B0015",
+            "receiver": "Odd_1",
+        }
+        for index, promoter in enumerate(promoters)
+    ]
+)
+display(devices)
+
+# OT-2 deck layout: each device in 4 replicate wells of a 96-well plate.
+plate = pd.DataFrame(index=list("ABCDEFGH"), columns=range(1, 13), dtype=object)
+for index, device_id in enumerate(devices["device"]):
+    for row in "EFGH":
+        plate.loc[row, 4 + index] = device_id
+display(plate)
+
+rng = np.random.default_rng(1)
+figure, axes = plt.subplots(figsize=(7, 3))
+axes.bar(promoters, rng.uniform(0.3, 1.0, size=len(promoters)), color="#128a3e")
+axes.set(ylabel="mean expression rate (MEFL)", title="Repressible-promoter Sources")
+plt.setp(axes.get_xticklabels(), rotation=30, ha="right", fontsize=8)
+plt.show()
+`,
+};
+
+/// Write the starter scripts into the workspace, skipping any that already
+/// exist (never clobber the user's files). Returns the names actually written.
+async function writeSynbioStarters(root: string): Promise<string[]> {
+  const written: string[] = [];
+  for (const [name, content] of Object.entries(SYNBIO_STARTERS)) {
+    const path = `${root}/${name}`;
+    if (await exists(path)) {
+      continue;
+    }
+    await writeTextFile(path, content);
+    written.push(name);
+  }
+  return written;
+}
 
 /// Per-workspace Python environment manager. The workspace `.venv` (in the
 /// project directory, like `.git`) is created and managed with the bundled
@@ -131,6 +316,23 @@ function EnvironmentBody({
   const uninstall = (name: string) =>
     void runOperation(() => pythonPackagesUninstall(root, [name]));
 
+  // Stand up a full synthetic-biology DBTL project: ensure the venv, install the
+  // tool stack, and drop the runnable starter scripts.
+  const setUpSynbio = () =>
+    void runOperation(async () => {
+      if (!status?.hasVenv) {
+        await pythonEnvCreate(root);
+      }
+      await pythonPackagesInstall(root, SYNBIO_PACKAGES);
+      const written = await writeSynbioStarters(root);
+      refreshTree();
+      setNotice(
+        written.length
+          ? `Synthetic biology project ready — added ${written.join(", ")}.`
+          : "Synthetic biology stack installed. Starter scripts already present.",
+      );
+    });
+
   if (statusResource.error) {
     return <Centered tone="danger">{statusResource.error}</Centered>;
   }
@@ -145,6 +347,7 @@ function EnvironmentBody({
         logRef={logRef}
         notice={notice}
         onCreate={createEnv}
+        onSetUpSynbio={setUpSynbio}
         root={root}
       />
     );
@@ -205,6 +408,16 @@ function EnvironmentBody({
             Install
           </Button>
         </div>
+        <button
+          className="flex w-fit cursor-pointer items-center gap-1 rounded-[6px] border-none bg-transparent p-0 text-[11px] font-medium text-cg-accent transition-opacity duration-150 ease-out hover:opacity-80 disabled:pointer-events-none disabled:opacity-45"
+          disabled={busy}
+          onClick={setUpSynbio}
+          title="Install the loica / sbol3 / sbol-utilities / pudupy / pyflapjack stack and add DBTL starter scripts"
+          type="button"
+        >
+          <Dna aria-hidden="true" size={12} strokeWidth={1.8} />
+          Add synthetic biology stack
+        </button>
       </header>
 
       <div className="min-h-0 min-w-0 overflow-y-auto px-1.5 py-1.5">
@@ -343,6 +556,7 @@ function CreatePrompt({
   logRef,
   notice,
   onCreate,
+  onSetUpSynbio,
   root,
 }: {
   busy: boolean;
@@ -350,6 +564,7 @@ function CreatePrompt({
   logRef: React.RefObject<HTMLDivElement | null>;
   notice: string | null;
   onCreate: () => void;
+  onSetUpSynbio: () => void;
   root: string;
 }) {
   const folder = root.split(/[\\/]/).filter(Boolean).pop() ?? "";
@@ -370,8 +585,7 @@ function CreatePrompt({
           <p className="m-0 text-[11.5px] leading-snug text-cg-muted">
             Set up a Python project here — <code>pyproject.toml</code>,{" "}
             <code>uv.lock</code>, and a <code>.venv</code> — so you can install
-            packages (numpy, matplotlib, …) and run your scripts against them,
-            all from this panel.
+            packages and run your scripts against them, all from this panel.
           </p>
           {notice ? (
             <p className="m-0 text-[11px] leading-snug text-cg-danger">
@@ -381,7 +595,7 @@ function CreatePrompt({
           <Button
             className="mt-1 gap-1.5"
             disabled={busy}
-            onClick={onCreate}
+            onClick={onSetUpSynbio}
             size="sm"
             variant="default"
           >
@@ -392,9 +606,23 @@ function CreatePrompt({
                 size={13}
                 strokeWidth={1.8}
               />
-            ) : null}
-            Create environment
+            ) : (
+              <Dna aria-hidden="true" size={13} strokeWidth={1.8} />
+            )}
+            Set up synthetic biology project
           </Button>
+          <p className="m-0 max-w-[280px] text-[10.5px] leading-snug text-cg-muted">
+            Installs the DBTL stack — loica, sbol3, sbol-utilities, pudupy,
+            pyflapjack — and adds three runnable starter scripts.
+          </p>
+          <button
+            className="cursor-pointer rounded-[6px] border-none bg-transparent p-0 text-[11px] font-medium text-cg-muted underline-offset-2 hover:text-cg-fg hover:underline disabled:pointer-events-none disabled:opacity-45"
+            disabled={busy}
+            onClick={onCreate}
+            type="button"
+          >
+            or create an empty environment
+          </button>
         </div>
       </div>
       {log.length ? <ProgressLog log={log} logRef={logRef} /> : null}
