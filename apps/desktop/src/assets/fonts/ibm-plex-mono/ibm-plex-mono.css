@@ -1,8 +1,8 @@
 @font-face {
-  font-family: "Newsreader";
-  src: url("./Newsreader-latin.woff2") format("woff2");
+  font-family: "IBM Plex Mono";
+  src: url("./ibm-plex-mono-latin-400-normal.woff2") format("woff2");
   font-style: normal;
-  font-weight: 200 800;
+  font-weight: 400;
   font-display: swap;
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
@@ -11,10 +11,10 @@
 }
 
 @font-face {
-  font-family: "Newsreader";
-  src: url("./Newsreader-latin-ext.woff2") format("woff2");
+  font-family: "IBM Plex Mono";
+  src: url("./ibm-plex-mono-latin-ext-400-normal.woff2") format("woff2");
   font-style: normal;
-  font-weight: 200 800;
+  font-weight: 400;
   font-display: swap;
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
@@ -23,10 +23,10 @@
 }
 
 @font-face {
-  font-family: "Newsreader";
-  src: url("./Newsreader-Italic-latin.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 200 800;
+  font-family: "IBM Plex Mono";
+  src: url("./ibm-plex-mono-latin-700-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
   font-display: swap;
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
@@ -35,10 +35,10 @@
 }
 
 @font-face {
-  font-family: "Newsreader";
-  src: url("./Newsreader-Italic-latin-ext.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 200 800;
+  font-family: "IBM Plex Mono";
+  src: url("./ibm-plex-mono-latin-ext-700-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
   font-display: swap;
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,

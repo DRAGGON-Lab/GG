@@ -46,17 +46,17 @@ const markdownComponents: Components = {
   // above each heading (margins add to the parent grid gap) so sections
   // group with what follows them, not what precedes.
   h1: ({ children }) => (
-    <h2 className="m-0 mt-2 font-serif text-[17px] font-[560] leading-snug tracking-[-0.01em] text-cg-fg first:mt-0">
+    <h2 className="m-0 mt-2 text-[17px] font-[600] leading-snug tracking-[-0.01em] text-cg-fg first:mt-0">
       {children}
     </h2>
   ),
   h2: ({ children }) => (
-    <h3 className="m-0 mt-1.5 font-serif text-[15px] font-[560] leading-snug tracking-[-0.005em] text-cg-fg first:mt-0">
+    <h3 className="m-0 mt-1.5 text-[15px] font-[600] leading-snug tracking-[-0.01em] text-cg-fg first:mt-0">
       {children}
     </h3>
   ),
   h3: ({ children }) => (
-    <h4 className="m-0 mt-1 font-serif text-[13.5px] font-[580] leading-snug text-cg-fg first:mt-0">
+    <h4 className="m-0 mt-1 text-[13.5px] font-[620] leading-snug tracking-[-0.005em] text-cg-fg first:mt-0">
       {children}
     </h4>
   ),

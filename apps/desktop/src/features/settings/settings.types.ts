@@ -102,9 +102,9 @@ export const DEFAULT_TEXT_EDITOR_FONT_SIZE = 13;
 export const BACKUP_INTERVAL_MINUTES_MIN = 15;
 export const BACKUP_INTERVAL_MINUTES_MAX = 7 * 24 * 60;
 export const DEFAULT_BACKUP_INTERVAL_MINUTES = 60;
-export const BUNDLED_INCONSOLATA_FONT_FAMILY = "Inconsolata";
+export const BUNDLED_MONO_FONT_FAMILY = "IBM Plex Mono";
 export const TEXT_EDITOR_FONT_FALLBACK =
-  "Inconsolata, SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace";
+  "IBM Plex Mono, SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace";
 
 export const textEditorThemeOptions = [
   { label: "Match Interface", value: "matchApp" },
@@ -125,7 +125,7 @@ export const textEditorKeymapOptions = [
 
 export const textEditorFontOptions = [
   {
-    label: "Inconsolata",
+    label: "IBM Plex Mono",
     value: TEXT_EDITOR_FONT_FALLBACK,
   },
   {

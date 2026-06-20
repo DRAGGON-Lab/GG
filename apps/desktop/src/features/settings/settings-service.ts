@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   type AiProviderCommandError,
   type AppSettings,
-  BUNDLED_INCONSOLATA_FONT_FAMILY,
+  BUNDLED_MONO_FONT_FAMILY,
   defaultAppSettings,
   normalizeAppSettings,
   TEXT_EDITOR_FONT_FALLBACK,
@@ -12,8 +12,8 @@ import {
 } from "@/features/settings/settings.types";
 
 const browserFallbackKey = "bioeng.settings";
-const bundledInconsolataOption: TextEditorFontOption = {
-  label: BUNDLED_INCONSOLATA_FONT_FAMILY,
+const bundledMonoOption: TextEditorFontOption = {
+  label: BUNDLED_MONO_FONT_FAMILY,
   value: TEXT_EDITOR_FONT_FALLBACK,
 };
 
@@ -79,11 +79,11 @@ export async function loadTextEditorFontOptions() {
 
   const installedOptions = options.length > 0 ? options : textEditorFontOptions;
   return [
-    bundledInconsolataOption,
+    bundledMonoOption,
     ...installedOptions.filter(
       (option) =>
-        option.label !== bundledInconsolataOption.label &&
-        option.value !== bundledInconsolataOption.value,
+        option.label !== bundledMonoOption.label &&
+        option.value !== bundledMonoOption.value,
     ),
   ];
 }

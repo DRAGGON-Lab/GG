@@ -32,7 +32,7 @@ export class AppErrorBoundary extends React.Component<
     return (
       <div className="grid h-screen w-screen place-items-center bg-cg-editor p-6">
         <div className="grid max-w-[420px] gap-3 rounded-[10px] border border-cg-border bg-cg-surface p-5 text-center">
-          <h1 className="m-0 font-serif text-[18px] font-[520] leading-tight text-cg-fg">
+          <h1 className="m-0 text-[18px] font-[600] leading-tight tracking-[-0.01em] text-cg-fg">
             Something went wrong
           </h1>
           <p className="m-0 text-[12.5px] leading-relaxed text-cg-muted">

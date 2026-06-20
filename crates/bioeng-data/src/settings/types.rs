@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_TEXT_EDITOR_FONT: &str =
-    "Inconsolata, SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace";
+    "IBM Plex Mono, SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace";
 const DEFAULT_TEXT_EDITOR_FONT_SIZE: u16 = 13;
 const MIN_TEXT_EDITOR_FONT_SIZE: u16 = 9;
 const MAX_TEXT_EDITOR_FONT_SIZE: u16 = 28;

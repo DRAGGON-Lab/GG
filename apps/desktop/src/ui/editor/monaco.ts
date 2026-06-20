@@ -4,26 +4,32 @@ import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import type { TextEditorTheme } from "@/features/settings";
 import type { ResolvedTheme } from "@/ui";
 
+// The syntax palette maps to fluorophore emission channels — green keywords
+// (GFP), magenta strings (a second channel), amber numbers, mint operators —
+// against the warm-bone / microscopy-black editor grounds.
 const bioengEditorLightTheme: Monaco.editor.IStandaloneThemeData = {
   base: "vs",
   inherit: true,
   rules: [
-    { token: "comment", foreground: "5f6b65", fontStyle: "italic" },
-    { token: "keyword", foreground: "255f75", fontStyle: "bold" },
-    { token: "number", foreground: "8b5e34" },
-    { token: "operator", foreground: "255f75" },
-    { token: "string", foreground: "7b4c85" },
+    { token: "comment", foreground: "8a8377", fontStyle: "italic" },
+    { token: "keyword", foreground: "0f7d38", fontStyle: "bold" },
+    { token: "number", foreground: "9a6b1f" },
+    { token: "operator", foreground: "0f7d38" },
+    { token: "string", foreground: "b3327f" },
   ],
   colors: {
-    "editor.background": "#fcfdfb",
-    "editor.foreground": "#111827",
-    "editor.lineHighlightBackground": "#eef2ec",
-    "editorLineNumber.activeForeground": "#255f75",
-    "editorLineNumber.foreground": "#8b958f",
-    "editorOverviewRuler.border": "#d8ded8",
+    "editor.background": "#fdfcf9",
+    "editor.foreground": "#1a1714",
+    "editor.lineHighlightBackground": "#f2efe8",
+    "editor.lineHighlightBorder": "#00000000",
+    "editor.selectionBackground": "#12833f26",
+    "editorCursor.foreground": "#128a3e",
+    "editorLineNumber.activeForeground": "#128a3e",
+    "editorLineNumber.foreground": "#b3ab9e",
+    "editorOverviewRuler.border": "#e4ded3",
     "editorUnicodeHighlight.background": "#00000000",
     "editorUnicodeHighlight.border": "#00000000",
-    "editorWidget.background": "#fbfcfa",
+    "editorWidget.background": "#faf9f6",
   },
 };
 
@@ -31,22 +37,25 @@ const bioengEditorDarkTheme: Monaco.editor.IStandaloneThemeData = {
   base: "vs-dark",
   inherit: true,
   rules: [
-    { token: "comment", foreground: "a2aaa0", fontStyle: "italic" },
-    { token: "keyword", foreground: "75a8b8", fontStyle: "bold" },
-    { token: "number", foreground: "d6a86f" },
-    { token: "operator", foreground: "8ec3d4" },
-    { token: "string", foreground: "c993d1" },
+    { token: "comment", foreground: "6b7066", fontStyle: "italic" },
+    { token: "keyword", foreground: "56b87d", fontStyle: "bold" },
+    { token: "number", foreground: "d6a85a" },
+    { token: "operator", foreground: "74c4a4" },
+    { token: "string", foreground: "f0abfc" },
   ],
   colors: {
-    "editor.background": "#0f110e",
-    "editor.foreground": "#e7e9df",
-    "editor.lineHighlightBackground": "#20251e",
-    "editorLineNumber.activeForeground": "#75a8b8",
-    "editorLineNumber.foreground": "#737d70",
-    "editorOverviewRuler.border": "#30352d",
+    "editor.background": "#0a0b0d",
+    "editor.foreground": "#e9e8e3",
+    "editor.lineHighlightBackground": "#15181a",
+    "editor.lineHighlightBorder": "#00000000",
+    "editor.selectionBackground": "#2ecc6340",
+    "editorCursor.foreground": "#2ecc63",
+    "editorLineNumber.activeForeground": "#2ecc63",
+    "editorLineNumber.foreground": "#5b605c",
+    "editorOverviewRuler.border": "#262a2e",
     "editorUnicodeHighlight.background": "#00000000",
     "editorUnicodeHighlight.border": "#00000000",
-    "editorWidget.background": "#171a16",
+    "editorWidget.background": "#141618",
   },
 };
 

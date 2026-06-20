@@ -34,7 +34,7 @@ export function BioEngMark({ alt = "", className }: BrandImageProps) {
 }
 
 const WORDMARK_FONT_FAMILY =
-  'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  '"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 const WORDMARK_VIEWBOX_WIDTH = 300;
 const WORDMARK_VIEWBOX_HEIGHT = 150;
 /// The two lines share one `textLength`, so the shorter "STUDIO" is tracked out

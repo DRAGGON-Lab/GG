@@ -33,7 +33,7 @@ export function ConfirmDialog({
           )}
         >
           <header className="grid gap-1.5">
-            <Dialog.Title className="m-0 font-serif text-[17px] font-[520] leading-tight tracking-[-0.015em] text-cg-fg">
+            <Dialog.Title className="m-0 text-[17px] font-[600] leading-tight tracking-[-0.015em] text-cg-fg">
               {title}
             </Dialog.Title>
             <Dialog.Description className="m-0 text-[12px] leading-relaxed text-cg-muted">

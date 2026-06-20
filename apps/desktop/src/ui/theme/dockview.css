@@ -1,6 +1,6 @@
 .dockview-theme-bioeng {
-  --cg-dock-drag-bg: rgb(37 95 117 / 18%);
-  --cg-dock-scrollbar-bg: rgb(95 107 101 / 32%);
+  --cg-dock-drag-bg: rgb(18 138 62 / 16%);
+  --cg-dock-scrollbar-bg: rgb(108 102 93 / 32%);
 
   --dv-paneview-active-outline-color: var(--cg-focus);
   --dv-tabs-and-actions-container-font-size: 12px;
@@ -20,7 +20,7 @@
   --dv-active-sash-transition-duration: 120ms;
   --dv-active-sash-transition-delay: 0ms;
   --dv-spacing-padding: 0;
-  --dv-tab-border-radius: 0;
+  --dv-tab-border-radius: 8px;
   --dv-sash-border-radius: 0;
   --dv-dropdown-border-radius: 6px;
   --dv-tab-close-icon-size: 12px;
@@ -44,14 +44,14 @@
 }
 
 :root[data-theme="dark"] .dockview-theme-bioeng {
-  --cg-dock-drag-bg: rgb(117 168 184 / 20%);
-  --cg-dock-scrollbar-bg: rgb(162 170 160 / 32%);
+  --cg-dock-drag-bg: rgb(46 204 99 / 18%);
+  --cg-dock-scrollbar-bg: rgb(154 155 151 / 30%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) .dockview-theme-bioeng {
-    --cg-dock-drag-bg: rgb(117 168 184 / 20%);
-    --cg-dock-scrollbar-bg: rgb(162 170 160 / 32%);
+    --cg-dock-drag-bg: rgb(46 204 99 / 18%);
+    --cg-dock-scrollbar-bg: rgb(154 155 151 / 30%);
   }
 }
 
@@ -67,7 +67,12 @@
 
 .dockview-theme-bioeng .dv-tab {
   padding: 0 8px;
+  margin: 3px 1px 0;
   font-family: var(--cg-font-sans);
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .dockview-theme-bioeng
