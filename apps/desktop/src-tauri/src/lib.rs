@@ -1,6 +1,7 @@
 mod agent;
 mod ai;
 mod backup;
+mod data;
 mod inspector;
 mod mcp;
 mod python;
@@ -38,6 +39,13 @@ pub fn run() {
                     .map_err(std::io::Error::other)?;
 
             app.manage(database);
+
+            let sbol_db_path = app_data_dir.join("sbol.sqlite3");
+            let data_store =
+                tauri::async_runtime::block_on(data::state::DataStore::open(&sbol_db_path))
+                    .map_err(std::io::Error::other)?;
+            app.manage(data_store);
+
             let resource_dir = app.path().resource_dir().ok();
             app.manage(python::PythonState::new(resource_dir));
             backup::start_backup_scheduler(app.handle().clone());
@@ -91,6 +99,22 @@ pub fn run() {
             inspector::commands::database_inspector_rows_delete,
             inspector::commands::database_inspector_table_rows,
             inspector::commands::database_inspector_table_schema,
+            data::commands::data_overview,
+            data::commands::data_graphs_list,
+            data::commands::data_graph_get,
+            data::commands::data_graph_triples,
+            data::commands::data_objects_list,
+            data::commands::data_object_get,
+            data::commands::data_object_export,
+            data::commands::data_sequence_search,
+            data::commands::data_sequence_search_batch,
+            data::commands::data_sparql_execute,
+            data::commands::data_sparql_validate,
+            data::commands::data_sql_execute,
+            data::commands::data_sql_validate,
+            data::commands::data_schema_sql,
+            data::commands::data_import,
+            data::commands::data_import_many,
             agent::commands::agent_respond_permission,
             agent::commands::agent_respond_workspace_request,
             agent::commands::agent_send,

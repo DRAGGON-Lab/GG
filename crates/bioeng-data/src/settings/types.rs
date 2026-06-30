@@ -455,7 +455,15 @@ mod tests {
         // file parses, and Editor is the default first item.
         let order = super::default_activity_order();
         assert_eq!(order.first().map(String::as_str), Some("Editor"));
-        assert_eq!(order.len(), 3);
+        assert_eq!(
+            order,
+            vec![
+                "Editor".to_string(),
+                "Data".to_string(),
+                "Python".to_string(),
+                "AI".to_string(),
+            ]
+        );
         assert!(super::default_hidden_activity_items().is_empty());
     }
 

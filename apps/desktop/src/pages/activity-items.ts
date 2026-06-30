@@ -7,6 +7,7 @@ import type { ActivityItem, ActivityMode } from "@/pages/page.types";
 import {
   Code2,
   Database,
+  Dna,
   type LucideIcon,
   MessageSquare,
   Settings,
@@ -16,6 +17,7 @@ import {
 export const activityIconByMode = {
   AI: MessageSquare,
   Python: SquareTerminal,
+  Data: Dna,
   Database,
   Editor: Code2,
   Settings,
@@ -36,6 +38,11 @@ export const activityItemByMode = {
     Icon: activityIconByMode.AI,
     label: "AI",
     pageId: "ai",
+  },
+  Data: {
+    Icon: activityIconByMode.Data,
+    label: "Data",
+    pageId: "data",
   },
 } as const satisfies Record<ActivityRailItemId, ActivityItem>;
 

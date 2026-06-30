@@ -3,7 +3,13 @@ import type { ComponentType } from "react";
 import type { AiContextAttachmentInput } from "@/features/ai/core/ai-types";
 import type { LucideIcon } from "@/ui";
 
-export type ActivityMode = "AI" | "Editor" | "Python" | "Database" | "Settings";
+export type ActivityMode =
+  | "AI"
+  | "Editor"
+  | "Python"
+  | "Data"
+  | "Database"
+  | "Settings";
 
 /// Activities with a slot in the activity rail. Database and Settings are
 /// reachable via the command palette and settings page instead.
@@ -12,7 +18,13 @@ export type TopLevelActivityMode = Exclude<
   "Database" | "Settings"
 >;
 
-export type PageId = "ai" | "editor" | "python" | "database" | "settings";
+export type PageId =
+  | "ai"
+  | "editor"
+  | "python"
+  | "data"
+  | "database"
+  | "settings";
 
 export type ActivityItem = {
   label: TopLevelActivityMode;

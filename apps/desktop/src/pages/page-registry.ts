@@ -1,4 +1,5 @@
 import { aiPage } from "@/features/ai/page";
+import { dataPage } from "@/features/data/page";
 import { databasePage } from "@/features/database/page";
 import { editorPage } from "@/features/editor/page";
 import { pythonPage } from "@/features/python/page";
@@ -20,6 +21,7 @@ export const pageRegistry = [
   aiPage,
   editorPage,
   pythonPage,
+  dataPage,
   databasePage,
   settingsPage,
 ] as const satisfies readonly PageDefinition[];
@@ -32,4 +34,5 @@ export const pageByActivity = {
   AI: "ai",
   Editor: "editor",
   Python: "python",
+  Data: "data",
 } as const satisfies Record<TopLevelActivityMode, PageId>;

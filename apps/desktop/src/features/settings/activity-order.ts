@@ -1,6 +1,6 @@
 import activityRailDefaults from "./activity-order.json";
 
-export type ActivityRailItemId = "Editor" | "Python" | "AI";
+export type ActivityRailItemId = "Editor" | "Python" | "AI" | "Data";
 
 // Order + hidden-by-default items are the single source of truth in
 // activity-order.json, shared verbatim with the Rust backend (which embeds the
