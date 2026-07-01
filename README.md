@@ -2,6 +2,14 @@
 
 Bio Eng Studio is a desktop IDE for biological engineers. It combines a React/Tauri workbench, a Rust service layer, local Python execution, AI-assisted editing, SQLite-backed persistence, and backup tooling so users can write Python for biological simulations, inspect project data, and iterate with an assistant in one native application.
 
+## Get started
+
+```sh
+pnpm install
+pnpm tauri dev
+```
+
+
 ## What you can do with Bio Eng Studio
 
 - **Edit scientific code and notes** in a Monaco-powered workspace editor with file exploration, tabs, splits, Python language support, diagnostics, output, and history panels.
