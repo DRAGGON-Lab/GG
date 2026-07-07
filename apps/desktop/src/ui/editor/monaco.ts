@@ -1,5 +1,6 @@
 import type * as Monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 
 import type { TextEditorTheme } from "@/features/settings";
 import type { ResolvedTheme } from "@/ui";
@@ -74,7 +75,8 @@ export const editorUnicodeHighlightOptions = {
 export function configureMonaco(monaco: typeof Monaco) {
   if (!globalThis.MonacoEnvironment) {
     globalThis.MonacoEnvironment = {
-      getWorker: () => new editorWorker(),
+      getWorker: (_workerId: string, label: string) =>
+        label === "json" ? new jsonWorker() : new editorWorker(),
     };
   }
 

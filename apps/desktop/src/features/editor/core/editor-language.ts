@@ -2,15 +2,18 @@ import "monaco-editor/esm/vs/basic-languages/ini/ini.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/shell/shell.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution.js";
+import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
 
 const PLAINTEXT = "plaintext";
 
 /// Maps a file extension to the Monaco language id used for its model. Only
-/// `.py`/`.pyi` resolve to `python`; everything else uses a syntax-only
-/// tokenizer (or plaintext) so non-Python files never reach the Python LSP.
+/// `.py`/`.pyi` resolve to `python`; `.json` uses Monaco's built-in JSON
+/// language service (its own worker), and everything else uses a syntax-only
+/// tokenizer (or plaintext) — so non-Python files never reach the Python LSP.
 const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   ".py": "python",
   ".pyi": "python",
+  ".json": "json",
   ".md": "markdown",
   ".yaml": "yaml",
   ".yml": "yaml",
