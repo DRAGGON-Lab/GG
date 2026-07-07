@@ -736,7 +736,12 @@ export function EditorPage(_: PageRuntime) {
 
   const handleOpenFile = useCallback(async () => {
     const selected = await openDialog({
-      filters: [{ extensions: ["py", "pyi", "txt"], name: "Python" }],
+      filters: [
+        {
+          extensions: ["py", "pyi", "json", "jsonc", "txt"],
+          name: "Editor files",
+        },
+      ],
       multiple: false,
     });
 
