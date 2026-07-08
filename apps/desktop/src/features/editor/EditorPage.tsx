@@ -54,6 +54,7 @@ import {
   initProposedChangesBridge,
   setEditorWorkspaceDelegates,
 } from "@/features/editor/core/agent-edit-applier";
+import { runFormatOnSave } from "@/features/editor/core/formatting";
 import {
   type CheckpointSummary,
   workspaceHistoryInitRepo,
@@ -943,7 +944,7 @@ export function EditorPage(_: PageRuntime) {
     [closePanelForPath, removeDocument],
   );
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     const key = activeKeyRef.current;
     const document = key ? documentsRef.current[key] : null;
 
@@ -951,8 +952,17 @@ export function EditorPage(_: PageRuntime) {
       return;
     }
 
-    void saveDocument(key, document.text);
-  }, [saveDocument]);
+    // Format the live model first (a no-op when disabled/unsupported), then
+    // persist its current text — matching the editor's ⌘S save.
+    await runFormatOnSave(
+      monaco,
+      document.uri,
+      document.name,
+      settings.textEditor,
+    );
+    const model = monaco.editor.getModel(monaco.Uri.parse(document.uri));
+    await saveDocument(key, model?.getValue() ?? document.text);
+  }, [saveDocument, settings.textEditor]);
 
   // --- Run ---
 

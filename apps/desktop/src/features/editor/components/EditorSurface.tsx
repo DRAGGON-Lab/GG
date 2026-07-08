@@ -8,6 +8,7 @@ import {
   isPythonName,
   languageForName,
 } from "@/features/editor/core/editor-language";
+import { runFormatOnSave } from "@/features/editor/core/formatting";
 import {
   applyPythonDiagnostics,
   configurePythonMonaco,
@@ -99,7 +100,24 @@ export function EditorSurface({
     onCursorMove(line, character),
   );
   const emitFocus = useEffectEvent(() => onFocus());
-  const emitSave = useEffectEvent((text: string) => onSave(text));
+  // Format-on-save runs the language formatter on the model, then persists the
+  // formatted buffer. Wrapped as an effect event so the ⌘S command — registered
+  // once at mount — always reads the current settings and document.
+  const saveNow = useEffectEvent(async () => {
+    const editor = editorRef.current;
+
+    if (!editor) {
+      return;
+    }
+
+    await runFormatOnSave(
+      monaco,
+      document.uri,
+      document.name,
+      textEditorSettings,
+    );
+    onSave(editor.getValue());
+  });
   const syncDocumentChange = useEffectEvent((uri: string, text: string) => {
     void pythonLspDocumentChange(uri, text).catch(() => undefined);
   });
@@ -148,7 +166,7 @@ export function EditorSurface({
     }
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      emitSave(editor.getValue());
+      void saveNow();
     });
 
     const changeDisposable = editor.onDidChangeModelContent(() => {

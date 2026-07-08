@@ -38,3 +38,13 @@ export function languageForName(name: string): string {
 export function isPythonName(name: string): boolean {
   return languageForName(name) === "python";
 }
+
+/// The Monaco language ids that format-on-save can reformat. Only languages
+/// with a registered document formatter belong here; add new file types as
+/// their formatters are wired up.
+const FORMAT_ON_SAVE_LANGUAGES = new Set<string>(["json"]);
+
+/// Whether format-on-save applies to a Monaco language id.
+export function canFormatOnSave(languageId: string): boolean {
+  return FORMAT_ON_SAVE_LANGUAGES.has(languageId);
+}
