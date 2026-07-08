@@ -5,6 +5,7 @@ import {
   type EdgeChange,
   type NodeChange,
   ReactFlow,
+  useNodesInitialized,
   useReactFlow,
 } from "@xyflow/react";
 import { useCallback, useEffect, useState } from "react";
@@ -56,7 +57,17 @@ export function CircuitCanvas({
   resolvedTheme: ResolvedTheme;
   textEditorSettings: TextEditorSettings;
 }) {
-  const { screenToFlowPosition } = useReactFlow();
+  const { fitView, screenToFlowPosition } = useReactFlow();
+
+  // `fitView` on mount runs before custom nodes are measured, which over-zooms;
+  // refit once ReactFlow has real node dimensions. Fires once (the flag stays
+  // true), so later edits don't re-frame the canvas.
+  const nodesInitialized = useNodesInitialized();
+  useEffect(() => {
+    if (nodesInitialized) {
+      void fitView({ maxZoom: 1, padding: 0.2 });
+    }
+  }, [nodesInitialized, fitView]);
 
   // The center peek shows one node's code at a time. `peek` holds the displayed
   // node through its exit transition; `open` drives the enter/exit.
@@ -106,6 +117,7 @@ export function CircuitCanvas({
         deleteKeyCode={["Backspace", "Delete"]}
         edges={edges}
         fitView
+        fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
         isValidConnection={isValidConnection}
         nodes={nodes}
         nodeTypes={CIRCUIT_NODE_TYPES}

@@ -13,6 +13,9 @@ export type EditorDocument = {
   path: string | null;
   name: string;
   text: string;
+  /// The last saved / on-disk contents. `text` differing from this is the
+  /// unsaved-changes ("dirty") state; undefined means a never-saved buffer.
+  savedText?: string;
 };
 
 /// An editor position for revealing a location. 1-based, matching Monaco.
@@ -84,6 +87,10 @@ export type HistoryManager = {
 export type EditorPageContextValue = {
   /// The open documents, keyed by path (or by URI for scratch buffers).
   documentsByPath: Record<string, EditorDocument>;
+  /// Whether each open document has unsaved edits, keyed like `documentsByPath`.
+  dirtyByKey: Record<string, boolean>;
+  /// Set a document's unsaved-edits flag (from the editor surface).
+  setDocumentDirty: (key: string, dirty: boolean) => void;
   /// The active document, or null when nothing is open.
   activeDocument: EditorDocument | null;
   /// LSP diagnostics for the active document's URI.

@@ -39,6 +39,7 @@ import {
   loadInitialDocument,
   loadStoredPath,
   saveCircuitFile,
+  serializeDocument,
   storeDocument,
   storePath,
 } from "@/features/circuit/core/circuit-file";
@@ -132,6 +133,13 @@ function CircuitWorkspace() {
   const [filePath, setFilePath] = useState<string | null>(() =>
     loadStoredPath(),
   );
+  // The document as of the last save / open / new. Comparing it to the live
+  // document yields the unsaved-changes ("dirty") state.
+  const [savedSnapshot, setSavedSnapshot] = useState<string>(() =>
+    serializeDocument(initial),
+  );
+
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const [runLines, setRunLines] = useState<RunLine[]>([]);
   const [running, setRunning] = useState(false);
@@ -161,6 +169,11 @@ function CircuitWorkspace() {
   );
 
   const generatedScript = useMemo(() => generateScript(document), [document]);
+
+  const dirty = useMemo(
+    () => serializeDocument(document) !== savedSnapshot,
+    [document, savedSnapshot],
+  );
 
   // Persist the working document to session storage so it survives reloads even
   // without an on-disk file.
@@ -339,6 +352,7 @@ function CircuitWorkspace() {
     setSelectedId(null);
     setFilePath(null);
     storePath(null);
+    setSavedSnapshot(serializeDocument(doc));
   }, [setEdges, setNodes]);
 
   const handleOpen = useCallback(async () => {
@@ -356,6 +370,7 @@ function CircuitWorkspace() {
     setSelectedId(null);
     setFilePath(selected);
     storePath(selected);
+    setSavedSnapshot(serializeDocument(doc));
   }, [setEdges, setNodes]);
 
   const handleSave = useCallback(async () => {
@@ -369,10 +384,31 @@ function CircuitWorkspace() {
       }
       path = selected;
     }
+    const snapshot = serializeDocument(document);
     await saveCircuitFile(path, document);
     setFilePath(path);
     storePath(path);
+    setSavedSnapshot(snapshot);
   }, [document, filePath]);
+
+  // ⌘S / Ctrl+S saves the circuit, but only while the Circuit page is the
+  // visible workbench tab (offsetParent is null when its panel is hidden), so
+  // it never collides with the editor's own ⌘S.
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        (event.key === "s" || event.key === "S")
+      ) {
+        if (rootRef.current && rootRef.current.offsetParent !== null) {
+          event.preventDefault();
+          void handleSave();
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleSave]);
 
   // --- Managed simulation environment ---
 
@@ -412,11 +448,11 @@ function CircuitWorkspace() {
     return promise;
   }, []);
 
-  // Provision the environment the first time the Simulate panel is activated —
-  // the user never manages Python by hand.
-  const ensureEnvRef = useRef(ensureEnv);
+  // Provision the environment eagerly when the Circuit workspace mounts, so it's
+  // ready by the time a simulation runs — the user never manages Python by hand
+  // and never waits for a first-use install. Idempotent, so Run/Import reuse it.
   useEffect(() => {
-    ensureEnvRef.current = ensureEnv;
+    void ensureEnv();
   }, [ensureEnv]);
 
   // Reveal the on-demand Output panel below the canvas, creating it on first run.
@@ -542,10 +578,6 @@ function CircuitWorkspace() {
       if (!panel) {
         return;
       }
-      // Provision the Python environment lazily when Simulate is opened.
-      if (panel.id === SIMULATE_PANEL_ID) {
-        void ensureEnvRef.current();
-      }
       // Widen the tool group for the Code tab, restore it for Node/Simulate, so
       // the code is readable without a manual resize on every switch.
       if (
@@ -578,6 +610,7 @@ function CircuitWorkspace() {
         selectedNodeId && updateNodeParam(selectedNodeId, key, value),
       circuitName: filePath ? baseName(filePath) : "Untitled circuit",
       deleteSelectedNode: () => selectedNodeId && deleteNode(selectedNodeId),
+      dirty,
       document,
       edges,
       envError,
@@ -615,6 +648,7 @@ function CircuitWorkspace() {
       applyNodeCode,
       changeInputCount,
       deleteNode,
+      dirty,
       document,
       edges,
       ensureEnv,
@@ -651,7 +685,7 @@ function CircuitWorkspace() {
 
   return (
     <CircuitPageContext.Provider value={contextValue}>
-      <div className="h-full min-h-0 min-w-0 bg-cg-editor">
+      <div className="h-full min-h-0 min-w-0 bg-cg-editor" ref={rootRef}>
         <DockviewReact
           components={CIRCUIT_DOCK_COMPONENTS}
           onReady={handleDockReady}
@@ -690,6 +724,7 @@ function PalettePanel() {
   return (
     <NodePalette
       circuitName={page.circuitName}
+      dirty={page.dirty}
       onAdd={page.addNode}
       onNew={page.onNew}
       onOpen={page.onOpen}

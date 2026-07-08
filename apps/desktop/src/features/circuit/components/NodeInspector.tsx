@@ -15,7 +15,7 @@ import {
   type ParamValue,
 } from "@/features/circuit/core/loica-model";
 import type { TextEditorSettings } from "@/features/settings";
-import { Button, type ResolvedTheme } from "@/ui";
+import { type ResolvedTheme, Trash2 } from "@/ui";
 import { cx } from "@/ui/class-name";
 
 type NodeInspectorProps = {
@@ -167,9 +167,14 @@ export function NodeInspector({
         </div>
       )}
 
-      <Button className="mt-1" onClick={onDelete} size="sm" variant="ghost">
+      <button
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-[6px] border border-cg-border bg-transparent px-2 py-1.5 text-[11.5px] font-medium text-cg-muted transition-colors hover:border-cg-danger/50 hover:bg-cg-danger/10 hover:text-cg-danger"
+        onClick={onDelete}
+        type="button"
+      >
+        <Trash2 aria-hidden="true" size={13} strokeWidth={1.8} />
         Delete node
-      </Button>
+      </button>
     </div>
   );
 }

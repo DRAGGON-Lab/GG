@@ -34,16 +34,19 @@ export function CircuitOutputPanel({
               return <OutputDisplay display={display} key={index} />;
             }
             return (
-              <pre className="whitespace-pre-wrap text-cg-danger" key={index}>
+              <pre className="whitespace-pre-wrap text-cg-muted" key={index}>
                 {line.text}
               </pre>
             );
           }
+          // stderr carries progress bars and warnings (loica/tqdm), not just
+          // errors, so it reads as muted secondary text — genuine failures show
+          // via the red exit badge above.
           return (
             <pre
               className={
                 line.stream === "stderr"
-                  ? "whitespace-pre-wrap text-cg-danger"
+                  ? "whitespace-pre-wrap text-cg-muted"
                   : "whitespace-pre-wrap text-cg-fg"
               }
               key={index}

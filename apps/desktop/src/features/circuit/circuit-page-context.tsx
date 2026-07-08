@@ -36,6 +36,7 @@ export type CircuitPageContextValue = {
   // Palette / sidebar
   addNode: (kind: NodeKind) => void;
   circuitName: string;
+  dirty: boolean;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;

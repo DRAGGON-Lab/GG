@@ -26,6 +26,9 @@ type EditorExplorerProps = {
   activePath: string | null;
   /// Bare folder name of the open workspace, or null when none is open.
   workspaceName: string | null;
+  /// Git working-tree status per absolute path ("modified" | "added" |
+  /// "deleted" | "renamed"), for the file decorations.
+  gitStatusByPath: Record<string, string>;
   nodes: FileNode[];
   loading: boolean;
   /// Bare name of the document the editor is focused on, or null.
@@ -58,9 +61,25 @@ const saveButtonClassName = sidebarHeaderIconButtonClassName;
 /// The explorer sidebar owns the workspace + file actions (header) and a
 /// status/save footer, wrapping a recursive Python file tree. Single-click
 /// previews a file; double-click opens it persistently.
+/// VS Code-style git decoration color for a file: added/new → green, deleted →
+/// red, modified/renamed → yellow.
+function gitStatusColorClass(status: string | undefined): string | undefined {
+  if (!status) {
+    return undefined;
+  }
+  if (status === "added") {
+    return "text-cg-success";
+  }
+  if (status === "deleted") {
+    return "text-cg-danger";
+  }
+  return "text-cg-warning";
+}
+
 export function EditorExplorer({
   activePath,
   workspaceName,
+  gitStatusByPath,
   nodes,
   loading,
   activeDocumentName,
@@ -142,6 +161,7 @@ export function EditorExplorer({
               <TreeNode
                 activePath={activePath}
                 depth={0}
+                gitStatusByPath={gitStatusByPath}
                 key={node.path}
                 node={node}
                 onConfirmOpenFile={onConfirmOpenFile}
@@ -192,12 +212,14 @@ export function EditorExplorer({
 function TreeNode({
   activePath,
   depth,
+  gitStatusByPath,
   node,
   onConfirmOpenFile,
   onOpenFile,
 }: {
   activePath: string | null;
   depth: number;
+  gitStatusByPath: Record<string, string>;
   node: FileNode;
   onConfirmOpenFile: (node: FileNode) => void;
   onOpenFile: (node: FileNode) => void;
@@ -239,6 +261,7 @@ function TreeNode({
               <TreeNode
                 activePath={activePath}
                 depth={depth + 1}
+                gitStatusByPath={gitStatusByPath}
                 key={child.path}
                 node={child}
                 onConfirmOpenFile={onConfirmOpenFile}
@@ -251,6 +274,7 @@ function TreeNode({
   }
 
   const isActive = activePath === node.path;
+  const statusColor = gitStatusColorClass(gitStatusByPath[node.path]);
 
   return (
     <button
@@ -265,11 +289,13 @@ function TreeNode({
       <span className="w-[13px]" />
       <FileText
         aria-hidden="true"
-        className="text-cg-muted"
+        className={statusColor ?? "text-cg-muted"}
         size={14}
         strokeWidth={1.8}
       />
-      <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-medium leading-none">
+      <span
+        className={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-medium leading-none ${statusColor ?? ""}`}
+      >
         {node.name}
       </span>
     </button>

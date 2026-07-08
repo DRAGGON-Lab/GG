@@ -130,3 +130,47 @@
   width: 10px;
   height: 10px;
 }
+
+/* Unsaved buffer: show a dot in the close slot; reveal the close ✕ on hover. */
+.dockview-theme-bioeng
+  .dv-tab
+  .dv-default-tab[data-dirty]
+  .dv-default-tab-action {
+  opacity: 1;
+}
+
+.dockview-theme-bioeng
+  .dv-tab
+  .dv-default-tab[data-dirty]
+  .dv-default-tab-action
+  .dv-svg {
+  display: none;
+}
+
+.dockview-theme-bioeng
+  .dv-tab
+  .dv-default-tab[data-dirty]
+  .dv-default-tab-action::before {
+  content: "";
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--cg-fg);
+  opacity: 0.65;
+}
+
+.dockview-theme-bioeng
+  .dv-tab:hover
+  .dv-default-tab[data-dirty]
+  .dv-default-tab-action
+  .dv-svg {
+  display: block;
+}
+
+.dockview-theme-bioeng
+  .dv-tab:hover
+  .dv-default-tab[data-dirty]
+  .dv-default-tab-action::before {
+  display: none;
+}

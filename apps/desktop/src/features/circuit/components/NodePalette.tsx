@@ -24,12 +24,14 @@ const OPERATOR_KINDS: NodeKind[] = [
 /// can also be dragged onto the canvas.
 export function NodePalette({
   circuitName,
+  dirty,
   onAdd,
   onNew,
   onOpen,
   onSave,
 }: {
   circuitName: string;
+  dirty: boolean;
   onAdd: (kind: NodeKind) => void;
   onNew: () => void;
   onOpen: () => void;
@@ -69,7 +71,18 @@ export function NodePalette({
             </IconButton>
           </>
         }
-        title={circuitName}
+        title={
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate">{circuitName}</span>
+            {dirty ? (
+              <span
+                aria-label="Unsaved changes"
+                className="size-1.5 shrink-0 rounded-full bg-cg-accent"
+                title="Unsaved changes"
+              />
+            ) : null}
+          </span>
+        }
       />
 
       <div className="min-h-0 min-w-0 overflow-auto p-2">

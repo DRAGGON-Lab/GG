@@ -59,6 +59,7 @@ import {
   type CheckpointSummary,
   workspaceHistoryInitRepo,
   workspaceHistoryRestoreFile,
+  workspaceHistoryWorkingChanges,
 } from "@/features/editor/core/history-service";
 import {
   type LspDiagnostic,
@@ -215,6 +216,7 @@ function ConnectedEditorPanel({
     reportCursor,
     resolvedTheme,
     saveDocument,
+    setDocumentDirty,
     textEditorSettings,
     updateDocumentText,
   } = useEditorPageContext();
@@ -244,6 +246,7 @@ function ConnectedEditorPanel({
           reportCursor(line);
         }
       }}
+      onDirtyChange={(dirty) => setDocumentDirty(path, dirty)}
       onEditorActionHandled={handleEditorActionHandled}
       onFocus={() => activateDocument(document.path ?? document.uri)}
       onSave={(text) => {
@@ -337,6 +340,12 @@ export function EditorPage(_: PageRuntime) {
   const [documentsByPath, setDocumentsByPath] = useState<
     Record<string, EditorDocument>
   >({});
+  const [dirtyByKey, setDirtyByKey] = useState<Record<string, boolean>>({});
+  // Git working-tree status per absolute path ("modified" | "added" | "deleted"
+  // | "renamed"), driving the file-tree decorations.
+  const [gitStatusByPath, setGitStatusByPath] = useState<
+    Record<string, string>
+  >({});
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<LspDiagnostic[]>([]);
   const [cursorLine, setCursorLine] = useState<number | null>(null);
@@ -412,6 +421,59 @@ export function EditorPage(_: PageRuntime) {
       return { ...current, [key]: { ...existing, text } };
     });
   }, []);
+
+  const setDocumentDirty = useCallback((key: string, dirty: boolean) => {
+    setDirtyByKey((current) =>
+      current[key] === dirty ? current : { ...current, [key]: dirty },
+    );
+  }, []);
+
+  // Refresh git working-tree status for the tree decorations. Keyed by absolute
+  // path (git reports repo-relative paths; the repo root is the workspace root).
+  const refreshGitStatus = useCallback(async () => {
+    if (!workspaceRoot) {
+      return;
+    }
+    try {
+      const changes = await workspaceHistoryWorkingChanges(workspaceRoot);
+      const next: Record<string, string> = {};
+      for (const change of changes) {
+        next[`${workspaceRoot}/${change.path}`] = change.status;
+      }
+      setGitStatusByPath(next);
+    } catch {
+      setGitStatusByPath({});
+    }
+  }, [workspaceRoot]);
+
+  // Re-read status when the workspace opens and after each save/restore
+  // (history epoch bumps); on-disk churn also refreshes it via the fs watcher.
+  useEffect(() => {
+    if (!workspaceRoot) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const changes = await workspaceHistoryWorkingChanges(workspaceRoot);
+        if (cancelled) {
+          return;
+        }
+        const next: Record<string, string> = {};
+        for (const change of changes) {
+          next[`${workspaceRoot}/${change.path}`] = change.status;
+        }
+        setGitStatusByPath(next);
+      } catch {
+        if (!cancelled) {
+          setGitStatusByPath({});
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceRoot, historyEpoch]);
 
   // --- Diagnostics + run runtime listeners ---
 
@@ -702,6 +764,7 @@ export function EditorPage(_: PageRuntime) {
         const document: EditorDocument = {
           name: baseName(path),
           path,
+          savedText: text,
           text,
           uri: fileUriFor(path),
         };
@@ -742,6 +805,7 @@ export function EditorPage(_: PageRuntime) {
           upsertDocument({
             name: baseName(path),
             path,
+            savedText: fresh,
             text: fresh,
             uri: fileUriFor(path),
           });
@@ -755,7 +819,13 @@ export function EditorPage(_: PageRuntime) {
     untitledCounterRef.current += 1;
     const name = `untitled-${untitledCounterRef.current}.py`;
     const uri = `file:///${name}`;
-    const document: EditorDocument = { name, path: null, text: "", uri };
+    const document: EditorDocument = {
+      name,
+      path: null,
+      savedText: "",
+      text: "",
+      uri,
+    };
     upsertDocument(document);
     setActiveKey(uri);
     openDocumentPanel(document, { preview: false });
@@ -836,6 +906,7 @@ export function EditorPage(_: PageRuntime) {
       const saved: EditorDocument = {
         name: baseName(path),
         path,
+        savedText: text,
         text,
         uri: fileUriFor(path),
       };
@@ -1111,7 +1182,7 @@ export function EditorPage(_: PageRuntime) {
 
           try {
             const fresh = await readTextFile(document.path);
-            return { ...document, text: fresh };
+            return { ...document, savedText: fresh, text: fresh };
           } catch {
             return null;
           }
@@ -1356,6 +1427,8 @@ export function EditorPage(_: PageRuntime) {
           void loadFolder(workspaceRoot, { silent: true });
           // Refresh any of the changed files that are open in the editor.
           void reloadFilesFromDisk(relevant);
+          // Keep the git tree decorations current with on-disk changes.
+          void refreshGitStatus();
         }
       },
       { delayMs: 300, recursive: true },
@@ -1374,7 +1447,7 @@ export function EditorPage(_: PageRuntime) {
       disposed = true;
       stop?.();
     };
-  }, [workspaceRoot, loadFolder, reloadFilesFromDisk]);
+  }, [workspaceRoot, loadFolder, reloadFilesFromDisk, refreshGitStatus]);
 
   // Persist the open on-disk files.
   useEffect(() => {
@@ -1437,6 +1510,7 @@ export function EditorPage(_: PageRuntime) {
       activeDocument,
       cursorLine,
       diagnostics,
+      dirtyByKey,
       documentsByPath,
       editorAction,
       getOpenDocument,
@@ -1451,6 +1525,7 @@ export function EditorPage(_: PageRuntime) {
       resolvedTheme,
       run: runState,
       saveDocument,
+      setDocumentDirty,
       textEditorSettings: settings.textEditor,
       updateDocumentText,
       workspaceRoot,
@@ -1460,6 +1535,7 @@ export function EditorPage(_: PageRuntime) {
       activeDocument,
       cursorLine,
       diagnostics,
+      dirtyByKey,
       documentsByPath,
       editorAction,
       getOpenDocument,
@@ -1474,6 +1550,7 @@ export function EditorPage(_: PageRuntime) {
       resolvedTheme,
       runState,
       saveDocument,
+      setDocumentDirty,
       settings.textEditor,
       updateDocumentText,
       workspaceRoot,
@@ -1746,6 +1823,7 @@ export function EditorPage(_: PageRuntime) {
           <EditorExplorer
             activeDocumentName={activeDocument?.name ?? null}
             activePath={activeDocument?.path ?? null}
+            gitStatusByPath={gitStatusByPath}
             loading={treeLoading}
             nodes={tree}
             onCollapse={() => setSidebarCollapsed(true)}

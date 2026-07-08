@@ -1,6 +1,12 @@
-import { Handle, type NodeProps, Position } from "@xyflow/react";
-import type { ReactNode } from "react";
+import {
+  Handle,
+  type NodeProps,
+  Position,
+  useUpdateNodeInternals,
+} from "@xyflow/react";
+import { useEffect } from "react";
 
+import { SbolGlyph } from "@/features/circuit/components/SbolGlyph";
 import type {
   AppNode,
   CircuitNodeData,
@@ -11,12 +17,15 @@ import {
   NODE_SPECS,
   type NodeKind,
 } from "@/features/circuit/core/loica-model";
+import { glyphForKind } from "@/features/circuit/core/sbol-glyph";
 import { cx } from "@/ui/class-name";
 
-/// Evenly distribute N handles down an edge of the node.
-function handleOffset(index: number, count: number): string {
-  return `${((index + 1) / (count + 1)) * 100}%`;
-}
+// Every node is a fixed-width box so its left/right connectors sit at consistent
+// spots regardless of the glyph's shape. Handles align to the glyph band, which
+// sits at the top of the box under the vertical padding.
+const NODE_WIDTH = 132;
+const GLYPH_SIZE = 44;
+const BOX_PAD_TOP = 8;
 
 function targetHandlesFor(
   kind: NodeKind,
@@ -51,7 +60,9 @@ function HandleColumn({
           id={handle.id}
           key={handle.id}
           position={position}
-          style={{ top: handleOffset(index, count) }}
+          // Centered on the box side; multi-input operators fan out evenly
+          // around that center.
+          style={{ top: `${((index + 1) / (count + 1)) * 100}%` }}
           type={type}
         />
       ))}
@@ -59,19 +70,32 @@ function HandleColumn({
   );
 }
 
-/// Wraps a node's body with its input/output handles. Double-clicking a node
-/// opens its code in the center peek (handled at the canvas level).
-function NodeShell({
-  children,
+/// A node: a fixed-width box holding its SBOL Visual glyph, name, and (for
+/// operators) parameter summary. Connectors sit on the box edges; double-click
+/// opens the code peek (handled at the canvas level).
+function GlyphNode({
   data,
+  id,
+  selected,
+  showParams,
 }: {
-  children: ReactNode;
   data: CircuitNodeData;
+  id: string;
+  selected: boolean;
+  showParams: boolean;
 }) {
+  const spec = getNodeSpec(data.kind);
   const targets = targetHandlesFor(data.kind, data.inputCount);
-  const sources = NODE_SPECS[data.kind].sources;
+
+  // ReactFlow caches handle positions; tell it to re-measure when the node
+  // mounts or its input count changes, so edges track the connectors.
+  const updateNodeInternals = useUpdateNodeInternals();
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [id, data.inputCount, updateNodeInternals]);
+
   return (
-    <div className="relative">
+    <div className="relative" style={{ width: NODE_WIDTH }}>
       {targets.length > 0 ? (
         <HandleColumn
           handles={targets}
@@ -79,10 +103,38 @@ function NodeShell({
           type="target"
         />
       ) : null}
-      {children}
-      {sources.length > 0 ? (
+
+      <div
+        className={cx(
+          "flex flex-col items-center gap-0.5 rounded-md border bg-cg-surface px-2 pb-2 shadow-sm transition-colors",
+          selected ? "border-cg-accent" : "border-cg-border",
+        )}
+        style={{
+          boxShadow: selected ? `0 0 0 1px ${spec.accent}` : undefined,
+          paddingTop: BOX_PAD_TOP,
+        }}
+        title={spec.description}
+      >
+        <SbolGlyph
+          color={spec.accent}
+          glyph={glyphForKind(data.kind)}
+          size={GLYPH_SIZE}
+        />
+        <span className="max-w-full truncate text-[12px] font-medium leading-tight text-cg-fg">
+          {data.name}
+        </span>
+        <span className="text-[9px] uppercase tracking-wide text-cg-muted">
+          {spec.label}
+        </span>
+        {/* Always reserved so every node is the same height, params or not. */}
+        <div className="mt-0.5 h-3 max-w-full truncate font-mono text-[9px] leading-3 text-cg-muted">
+          {showParams ? paramSummaryText(data.kind, data.params) : ""}
+        </div>
+      </div>
+
+      {spec.sources.length > 0 ? (
         <HandleColumn
-          handles={sources}
+          handles={spec.sources}
           position={Position.Right}
           type="source"
         />
@@ -91,88 +143,37 @@ function NodeShell({
   );
 }
 
-export function SpeciesNode({ data, selected }: NodeProps<AppNode>) {
-  const spec = getNodeSpec(data.kind);
+export function SpeciesNode({ data, id, selected }: NodeProps<AppNode>) {
   return (
-    <NodeShell data={data}>
-      <div
-        className={cx(
-          "min-w-[120px] rounded-full border bg-cg-surface px-3.5 py-2 text-center shadow-sm transition-colors",
-          selected ? "border-cg-accent" : "border-cg-border",
-        )}
-        style={{ boxShadow: selected ? `0 0 0 1px ${spec.accent}` : undefined }}
-      >
-        <div className="flex items-center justify-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className="size-2.5 shrink-0 rounded-full"
-            style={{ background: spec.accent }}
-          />
-          <span className="truncate text-[12px] font-medium text-cg-fg">
-            {data.name}
-          </span>
-        </div>
-        <div className="mt-0.5 text-[9.5px] uppercase tracking-wide text-cg-muted">
-          {spec.label}
-        </div>
-      </div>
-    </NodeShell>
+    <GlyphNode
+      data={data}
+      id={id}
+      selected={selected ?? false}
+      showParams={false}
+    />
   );
 }
 
-export function OperatorNode({ data, selected }: NodeProps<AppNode>) {
-  const spec = getNodeSpec(data.kind);
+export function OperatorNode({ data, id, selected }: NodeProps<AppNode>) {
   return (
-    <NodeShell data={data}>
-      <div
-        className={cx(
-          "min-w-[132px] rounded-md border bg-cg-surface px-3 py-2 shadow-sm transition-colors",
-          selected ? "border-cg-accent" : "border-cg-border",
-        )}
-        style={{
-          borderLeft: `3px solid ${spec.accent}`,
-          boxShadow: selected ? `0 0 0 1px ${spec.accent}` : undefined,
-        }}
-      >
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-[12px] font-medium text-cg-fg">
-            {data.name}
-          </span>
-          <span className="shrink-0 text-[9.5px] uppercase tracking-wide text-cg-muted">
-            {spec.label}
-          </span>
-        </div>
-        <ParamSummary kind={data.kind} params={data.params} />
-      </div>
-    </NodeShell>
+    <GlyphNode data={data} id={id} selected={selected ?? false} showParams />
   );
 }
 
-function ParamSummary({
-  kind,
-  params,
-}: {
-  kind: NodeKind;
-  params: Record<string, unknown>;
-}) {
-  const spec = getNodeSpec(kind);
-  const parts = spec.params
-    .map((paramSpec) => {
+function paramSummaryText(
+  kind: NodeKind,
+  params: Record<string, unknown>,
+): string {
+  return getNodeSpec(kind)
+    .params.map((paramSpec) => {
       const value = params[paramSpec.key];
       if (value === undefined || value === "") {
         return null;
       }
       return `${paramSpec.key}=${formatParam(value)}`;
     })
-    .filter((part): part is string => part !== null);
-  if (parts.length === 0) {
-    return null;
-  }
-  return (
-    <div className="mt-1 truncate font-mono text-[9.5px] text-cg-muted">
-      {parts.join(" ")}
-    </div>
-  );
+    .filter((part): part is string => part !== null)
+    .join(" ");
 }
 
 function formatParam(value: unknown): string {

@@ -44,6 +44,8 @@ type EditorSurfaceProps = {
   panelApi?: DockviewPanelApi;
   onChange: (text: string) => void;
   onCursorMove: (line: number, character: number) => void;
+  /// Reports whether the live buffer differs from the last saved contents.
+  onDirtyChange: (dirty: boolean) => void;
   onEditorActionHandled: (id: string) => void;
   onFocus: () => void;
   onSave: (text: string) => void;
@@ -62,6 +64,7 @@ export function EditorSurface({
   panelApi,
   onChange,
   onCursorMove,
+  onDirtyChange,
   onEditorActionHandled,
   onFocus,
   onSave,
@@ -95,7 +98,22 @@ export function EditorSurface({
     uri: document.uri,
   });
 
+  // The last saved contents, kept in a ref so the mount-time change listener
+  // always compares against the current baseline (it updates on save/reload).
+  const savedTextRef = useRef(document.savedText ?? "");
+
   const emitChange = useEffectEvent((text: string) => onChange(text));
+  const emitDirty = useEffectEvent((dirty: boolean) => onDirtyChange(dirty));
+
+  // Recompute dirty when the saved baseline changes (save/reload): the model is
+  // unchanged, but it may now match the freshly saved contents.
+  useEffect(() => {
+    savedTextRef.current = document.savedText ?? "";
+    const model = editorRef.current?.getModel();
+    if (model) {
+      emitDirty(model.getValue() !== savedTextRef.current);
+    }
+  }, [document.savedText]);
   const emitCursorMove = useEffectEvent((line: number, character: number) =>
     onCursorMove(line, character),
   );
@@ -169,9 +187,12 @@ export function EditorSurface({
       void saveNow();
     });
 
+    emitDirty(model.getValue() !== savedTextRef.current);
+
     const changeDisposable = editor.onDidChangeModelContent(() => {
       const text = editor.getValue();
       emitChange(text);
+      emitDirty(text !== savedTextRef.current);
 
       if (changeTimerRef.current !== null) {
         window.clearTimeout(changeTimerRef.current);
