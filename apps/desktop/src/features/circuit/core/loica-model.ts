@@ -70,6 +70,9 @@ export type NodeSpec = {
   /// from `inputCount` rather than this fixed list.
   dynamicInputs?: boolean;
   params: ParamSpec[];
+  /// The operator's expression rate as a KaTeX string, mirroring Loica's
+  /// `expression_rate`. Present on operators, omitted on species.
+  equation?: string;
 };
 
 const SPECIES_ACCENT = {
@@ -154,6 +157,7 @@ export const NODE_SPECS: Record<NodeKind, NodeSpec> = {
     category: "operator",
     description:
       "Constitutive promoter — produces its output at a constant rate.",
+    equation: "\\phi = \\text{rate}",
     kind: "source",
     label: "Source",
     loicaClass: "Source",
@@ -165,6 +169,8 @@ export const NODE_SPECS: Record<NodeKind, NodeSpec> = {
     accent: OPERATOR_ACCENT,
     category: "operator",
     description: "Inducible promoter — activation Hill response to one input.",
+    equation:
+      "\\phi = \\dfrac{\\alpha_0 + \\alpha_1\\,(i/K)^{n}}{1 + (i/K)^{n}}",
     kind: "receiver",
     label: "Receiver",
     loicaClass: "Receiver",
@@ -188,6 +194,8 @@ export const NODE_SPECS: Record<NodeKind, NodeSpec> = {
     category: "operator",
     description:
       "Single-input promoter — repression or activation (inverter/NOT when [hi, lo]).",
+    equation:
+      "\\phi = \\dfrac{\\alpha_0 + \\alpha_1\\,(x/K)^{n}}{1 + (x/K)^{n}}",
     kind: "hill1",
     label: "Hill1",
     loicaClass: "Hill1",
@@ -210,6 +218,8 @@ export const NODE_SPECS: Record<NodeKind, NodeSpec> = {
     accent: HILL2_ACCENT,
     category: "operator",
     description: "Two-input promoter — NOR / AND-from-NOR logic.",
+    equation:
+      "\\phi = \\dfrac{\\alpha_0 + \\alpha_1 r_1 + \\alpha_2 r_2 + \\alpha_3 r_1 r_2}{1 + r_1 + r_2 + r_1 r_2},\\quad r_i = (x_i/K_i)^{n_i}",
     kind: "hill2",
     label: "Hill2",
     loicaClass: "Hill2",
@@ -250,6 +260,8 @@ export const NODE_SPECS: Record<NodeKind, NodeSpec> = {
     category: "operator",
     description: "Additive combination of N inputs.",
     dynamicInputs: true,
+    equation:
+      "\\phi = \\sum_i \\dfrac{\\alpha_{i,0} + \\alpha_{i,1} r_i}{1 + r_i},\\quad r_i = (x_i/K_i)^{n_i}",
     kind: "sum",
     label: "Sum",
     loicaClass: "Sum",

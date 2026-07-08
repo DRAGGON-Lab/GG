@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { LoicaCodeEditor } from "@/features/circuit/components/LoicaCodeEditor";
+import { NodeEquation } from "@/features/circuit/components/NodeEquation";
 import {
   assignVarNames,
   constructorCall,
@@ -124,6 +125,8 @@ export function NodeInspector({
         inputNames={inputNames}
         outputNames={outputNames}
       />
+
+      {spec.equation ? <NodeEquation equation={spec.equation} /> : null}
 
       {mode === "form" ? (
         <div className="flex flex-col gap-2.5">
