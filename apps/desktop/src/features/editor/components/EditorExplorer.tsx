@@ -32,7 +32,6 @@ type EditorExplorerProps = {
   runtimeAvailable: boolean;
   onCollapse: () => void;
   onNewFile: () => void;
-  onOpenFilePicker: () => void;
   onOpenFolder: () => void;
   onSave: () => void;
   /// Single-click: open as a preview tab.
@@ -68,7 +67,6 @@ export function EditorExplorer({
   runtimeAvailable,
   onCollapse,
   onNewFile,
-  onOpenFilePicker,
   onOpenFolder,
   onSave,
   onOpenFile,
@@ -88,15 +86,6 @@ export function EditorExplorer({
           variant="ghost"
         >
           <Plus aria-hidden="true" size={15} strokeWidth={1.9} />
-        </IconButton>
-        <IconButton
-          className={headerIconButtonClassName}
-          label="Open file"
-          onClick={onOpenFilePicker}
-          title="Open file…"
-          variant="ghost"
-        >
-          <FileText aria-hidden="true" size={14} strokeWidth={1.8} />
         </IconButton>
         <IconButton
           className={headerIconButtonClassName}

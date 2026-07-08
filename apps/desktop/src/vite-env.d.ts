@@ -3,7 +3,7 @@
 declare global {
   var MonacoEnvironment:
     | {
-        getWorker: () => Worker;
+        getWorker: (workerId: string, label: string) => Worker;
       }
     | undefined;
 }

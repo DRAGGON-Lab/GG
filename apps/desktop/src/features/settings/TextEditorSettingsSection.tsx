@@ -129,6 +129,20 @@ export function TextEditorSettingsSection() {
           </select>
         </label>
 
+        <label className="col-span-full flex min-w-0 items-start gap-2 text-[11.5px] font-semibold leading-snug text-cg-fg">
+          <input
+            checked={textEditorSettings.formatOnSave}
+            className="mt-0.5 size-3.5 flex-none accent-cg-focus"
+            onChange={(event) => {
+              setTextEditorSettings({
+                formatOnSave: event.currentTarget.checked,
+              });
+            }}
+            type="checkbox"
+          />
+          <span>Format on save (JSON files)</span>
+        </label>
+
         <label className={`${settingsFieldClassName} col-span-full`}>
           <span>Default Text Size</span>
           <div className="grid grid-cols-[minmax(0,1fr)_74px] items-center gap-2.5 [@container(max-width:380px)]:grid-cols-1">

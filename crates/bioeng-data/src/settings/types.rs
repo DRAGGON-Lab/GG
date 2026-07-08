@@ -340,6 +340,8 @@ pub struct TextEditorSettings {
     pub keymap: TextEditorKeymap,
     #[serde(default)]
     pub theme: TextEditorTheme,
+    #[serde(default)]
+    pub format_on_save: bool,
 }
 
 impl TextEditorSettings {
@@ -363,6 +365,7 @@ impl Default for TextEditorSettings {
             font_size: DEFAULT_TEXT_EDITOR_FONT_SIZE,
             keymap: TextEditorKeymap::Default,
             theme: TextEditorTheme::MatchApp,
+            format_on_save: false,
         }
     }
 }

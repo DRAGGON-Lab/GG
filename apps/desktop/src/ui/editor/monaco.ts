@@ -75,7 +75,7 @@ export const editorUnicodeHighlightOptions = {
 export function configureMonaco(monaco: typeof Monaco) {
   if (!globalThis.MonacoEnvironment) {
     globalThis.MonacoEnvironment = {
-      getWorker: (_workerId?: string, label?: string) =>
+      getWorker: (_workerId: string, label: string) =>
         label === "json" ? new jsonWorker() : new editorWorker(),
     };
   }

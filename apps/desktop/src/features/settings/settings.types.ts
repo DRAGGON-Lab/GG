@@ -15,6 +15,9 @@ export type TextEditorSettings = {
   fontSize: number;
   keymap: TextEditorKeymap;
   theme: TextEditorTheme;
+  /// Reformat a supported file's buffer with the language formatter each time it
+  /// is saved from the editor. See `canFormatOnSave` for the supported set.
+  formatOnSave: boolean;
 };
 
 /** Vestigial platform account settings, retained for settings compatibility.
@@ -161,6 +164,7 @@ export const defaultTextEditorSettings: TextEditorSettings = {
   fontSize: DEFAULT_TEXT_EDITOR_FONT_SIZE,
   keymap: "default",
   theme: "matchApp",
+  formatOnSave: false,
 };
 
 export const DEFAULT_PLATFORM_SERVER_URL = "https://api.bioeng.build";
@@ -435,6 +439,10 @@ export function normalizeAppSettings(value: unknown): AppSettings {
       theme: isTextEditorTheme(textEditor.theme)
         ? textEditor.theme
         : defaultTextEditorSettings.theme,
+      formatOnSave:
+        typeof textEditor.formatOnSave === "boolean"
+          ? textEditor.formatOnSave
+          : defaultTextEditorSettings.formatOnSave,
     },
   };
 }

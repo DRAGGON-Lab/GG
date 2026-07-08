@@ -54,6 +54,7 @@ import {
   initProposedChangesBridge,
   setEditorWorkspaceDelegates,
 } from "@/features/editor/core/agent-edit-applier";
+import { runFormatOnSave } from "@/features/editor/core/formatting";
 import {
   type CheckpointSummary,
   workspaceHistoryInitRepo,
@@ -357,6 +358,10 @@ export function EditorPage(_: PageRuntime) {
   const dockApiRef = useRef<DockviewApi | null>(null);
   const panelRecordsRef = useRef<Map<string, EditorPanelRecord>>(new Map());
   const previewPanelIdRef = useRef<string | null>(null);
+  // The editor group's tab strip is normally hidden while it holds only the
+  // wordmark placeholder, but it must be revealed while the sidebar is
+  // collapsed so the tab-row reopen button stays reachable.
+  const sidebarCollapsedRef = useRef(sidebarCollapsed);
   const panelSequenceRef = useRef(0);
   const untitledCounterRef = useRef(0);
   const outputCounterRef = useRef(0);
@@ -542,7 +547,11 @@ export function EditorPage(_: PageRuntime) {
 
       setActiveKey(null);
       setEditorPanelParams(api, record);
-      syncEditorGroupHeader(api, panelRecordsRef.current);
+      syncEditorGroupHeader(
+        api,
+        panelRecordsRef.current,
+        sidebarCollapsedRef.current,
+      );
       panel.api.setActive();
     },
     [setEditorPanelParams],
@@ -550,6 +559,16 @@ export function EditorPage(_: PageRuntime) {
   useEffect(() => {
     closePanelRef.current = closeEditorPanel;
   });
+
+  // Reveal the editor group's tab strip while collapsed (so its tab-row reopen
+  // button is reachable) and hide it again once expanded.
+  useEffect(() => {
+    sidebarCollapsedRef.current = sidebarCollapsed;
+    const api = dockApiRef.current;
+    if (api) {
+      syncEditorGroupHeader(api, panelRecordsRef.current, sidebarCollapsed);
+    }
+  }, [sidebarCollapsed]);
 
   // Open a document in the editor group. Single preview tab promoted on
   // double-click (VS Code semantics).
@@ -598,7 +617,11 @@ export function EditorPage(_: PageRuntime) {
         }
 
         setEditorPanelParams(api, emptyRecord);
-        syncEditorGroupHeader(api, panelRecordsRef.current);
+        syncEditorGroupHeader(
+          api,
+          panelRecordsRef.current,
+          sidebarCollapsedRef.current,
+        );
         api.getPanel(emptyRecord.panelId)?.api.setActive();
         return;
       }
@@ -652,7 +675,11 @@ export function EditorPage(_: PageRuntime) {
         previewPanelIdRef.current = panelId;
       }
 
-      syncEditorGroupHeader(api, panelRecordsRef.current);
+      syncEditorGroupHeader(
+        api,
+        panelRecordsRef.current,
+        sidebarCollapsedRef.current,
+      );
       api.getPanel(panelId)?.api.setActive();
     },
     [persistEditorPanel, setEditorPanelParams],
@@ -733,22 +760,6 @@ export function EditorPage(_: PageRuntime) {
     setActiveKey(uri);
     openDocumentPanel(document, { preview: false });
   }, [openDocumentPanel, upsertDocument]);
-
-  const handleOpenFile = useCallback(async () => {
-    const selected = await openDialog({
-      filters: [
-        {
-          extensions: ["py", "pyi", "json", "jsonc", "txt"],
-          name: "Editor files",
-        },
-      ],
-      multiple: false,
-    });
-
-    if (typeof selected === "string") {
-      await openPath(selected, { preview: false });
-    }
-  }, [openPath]);
 
   // `silent` skips the loading placeholder — used for background refreshes
   // (the fs watcher) so saving a file doesn't flash the tree. The structural
@@ -933,7 +944,7 @@ export function EditorPage(_: PageRuntime) {
     [closePanelForPath, removeDocument],
   );
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     const key = activeKeyRef.current;
     const document = key ? documentsRef.current[key] : null;
 
@@ -941,8 +952,17 @@ export function EditorPage(_: PageRuntime) {
       return;
     }
 
-    void saveDocument(key, document.text);
-  }, [saveDocument]);
+    // Format the live model first (a no-op when disabled/unsupported), then
+    // persist its current text — matching the editor's ⌘S save.
+    await runFormatOnSave(
+      monaco,
+      document.uri,
+      document.name,
+      settings.textEditor,
+    );
+    const model = monaco.editor.getModel(monaco.Uri.parse(document.uri));
+    await saveDocument(key, model?.getValue() ?? document.text);
+  }, [saveDocument, settings.textEditor]);
 
   // --- Run ---
 
@@ -1493,7 +1513,11 @@ export function EditorPage(_: PageRuntime) {
         path: null,
       });
       editorPanel.api.setActive();
-      syncEditorGroupHeader(api, panelRecordsRef.current);
+      syncEditorGroupHeader(
+        api,
+        panelRecordsRef.current,
+        sidebarCollapsedRef.current,
+      );
 
       api.onDidRemovePanel((panel) => {
         panelRecordsRef.current.delete(panel.id);
@@ -1503,7 +1527,11 @@ export function EditorPage(_: PageRuntime) {
         if (panel.id === EDITOR_DOCK_PANEL_IDS.review) {
           setReviewOpen(false);
         }
-        syncEditorGroupHeader(api, panelRecordsRef.current);
+        syncEditorGroupHeader(
+          api,
+          panelRecordsRef.current,
+          sidebarCollapsedRef.current,
+        );
       });
 
       api.onDidActivePanelChange((panel) => {
@@ -1648,13 +1676,15 @@ export function EditorPage(_: PageRuntime) {
   const DockPrefixActions = useMemo(
     () =>
       function DockPrefixActions(props: IDockviewHeaderActionsProps) {
+        // The reopen affordance rides the editor group's tab row. The placeholder
+        // keeps that group alive even with no file open, so it stays reachable.
         const groupHasEditor = props.panels.some(
           (panel) =>
             (panel.params as EditorDockPanelParams | undefined)?.kind ===
             "editor",
         );
 
-        if (!groupHasEditor || !sidebarCollapsed) {
+        if (!sidebarCollapsed || !groupHasEditor) {
           return null;
         }
 
@@ -1724,7 +1754,6 @@ export function EditorPage(_: PageRuntime) {
             }
             onNewFile={handleNew}
             onOpenFile={(node) => void openPath(node.path, { preview: true })}
-            onOpenFilePicker={() => void handleOpenFile()}
             onOpenFolder={() => void handleOpenFolder()}
             onSave={handleSave}
             runtimeAvailable={runtime?.available ?? false}
@@ -1863,10 +1892,12 @@ function getEditorReferencePanel(api: DockviewApi): IDockviewPanel | undefined {
 
 /// Hide the editor group's tab strip while it holds only the wordmark
 /// placeholder, so the default empty screen carries no tab; reveal it once a
-/// document occupies the group.
+/// document occupies the group — or whenever the sidebar is collapsed, since
+/// the strip then hosts the only control that reopens the sidebar.
 function syncEditorGroupHeader(
   api: DockviewApi,
   records: Map<string, EditorPanelRecord>,
+  sidebarCollapsed: boolean,
 ) {
   const editorPanel = getEditorReferencePanel(api);
 
@@ -1875,7 +1906,7 @@ function syncEditorGroupHeader(
   }
 
   editorPanel.api.group.header.hidden =
-    getOpenEditorPanelRecords(records).length === 0;
+    getOpenEditorPanelRecords(records).length === 0 && !sidebarCollapsed;
 }
 
 function getNewEditorPanelPosition(
