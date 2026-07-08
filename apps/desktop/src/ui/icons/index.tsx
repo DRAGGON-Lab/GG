@@ -79,6 +79,7 @@ export {
   TimerReset,
   Trash2,
   WandSparkles,
+  Waypoints,
   X,
 } from "lucide-react";
 

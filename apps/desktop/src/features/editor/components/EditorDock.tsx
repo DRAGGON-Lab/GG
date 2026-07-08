@@ -6,6 +6,7 @@ import {
 } from "dockview-react";
 import { type ReactNode, useEffect, useState } from "react";
 
+import { useEditorPageContext } from "@/features/editor/editor-page-context";
 import { BioEngStudioWordmark } from "@/ui";
 
 export type EditorDockPanelKind =
@@ -84,10 +85,16 @@ export function EditorEmptySurface() {
 export function EditorDockTab(
   props: IDockviewPanelHeaderProps<EditorDockPanelParams>,
 ) {
+  const { dirtyByKey } = useEditorPageContext();
   const isPreview = Boolean(props.params?.isPreview);
   // The wordmark placeholder is the editor group's permanent floor: it carries
   // no close button, so the center panel can never be closed all the way.
   const isPlaceholder = Boolean(props.params?.isPlaceholder);
+
+  // A buffer with unsaved edits is dirty; the dot rides the close-button slot
+  // (turns into ✕ on hover) via CSS.
+  const documentPath = props.params?.documentPath ?? null;
+  const dirty = documentPath ? Boolean(dirtyByKey[documentPath]) : false;
 
   return (
     <DockviewDefaultTab
@@ -97,6 +104,7 @@ export function EditorDockTab(
           ? () => props.params?.closePanel?.(props.api.id)
           : undefined
       }
+      data-dirty={dirty ? "" : undefined}
       data-preview={isPreview ? "" : undefined}
       hideClose={isPlaceholder}
       onDoubleClick={() => props.params?.persistPreviewPanel?.(props.api.id)}

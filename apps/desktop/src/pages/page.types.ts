@@ -6,6 +6,7 @@ import type { LucideIcon } from "@/ui";
 export type ActivityMode =
   | "AI"
   | "Editor"
+  | "Circuit"
   | "Python"
   | "Data"
   | "Database"
@@ -21,6 +22,7 @@ export type TopLevelActivityMode = Exclude<
 export type PageId =
   | "ai"
   | "editor"
+  | "circuit"
   | "python"
   | "data"
   | "database"

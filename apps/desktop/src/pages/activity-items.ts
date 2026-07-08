@@ -12,11 +12,13 @@ import {
   MessageSquare,
   Settings,
   SquareTerminal,
+  Waypoints,
 } from "@/ui";
 
 export const activityIconByMode = {
   AI: MessageSquare,
   Python: SquareTerminal,
+  Circuit: Waypoints,
   Data: Dna,
   Database,
   Editor: Code2,
@@ -28,6 +30,11 @@ export const activityItemByMode = {
     Icon: activityIconByMode.Editor,
     label: "Editor",
     pageId: "editor",
+  },
+  Circuit: {
+    Icon: activityIconByMode.Circuit,
+    label: "Circuit",
+    pageId: "circuit",
   },
   Python: {
     Icon: activityIconByMode.Python,
