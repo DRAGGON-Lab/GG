@@ -1,6 +1,7 @@
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import { type ReactNode, useEffect, useRef } from "react";
 
+import { languageForName } from "@/features/editor/core/editor-language";
 import type { CheckpointFileDiff } from "@/features/editor/core/history-service";
 import { configurePythonMonaco } from "@/features/editor/core/monaco-python";
 import type { TextEditorSettings } from "@/features/settings";
@@ -149,10 +150,8 @@ export function DiffView({
   );
 }
 
-const PYTHON_EXTENSIONS = /\.(py|pyi)$/i;
-
 function languageForPath(path: string) {
-  return PYTHON_EXTENSIONS.test(path) ? "python" : "plaintext";
+  return languageForName(path);
 }
 
 /// Split (side-by-side) vs. unified diff layout.

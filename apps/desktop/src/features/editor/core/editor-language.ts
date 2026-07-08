@@ -1,4 +1,5 @@
 import "monaco-editor/esm/vs/basic-languages/ini/ini.contribution.js";
+import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/shell/shell.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution.js";
@@ -23,15 +24,18 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   ".sh": "shell",
 };
 
+const LANGUAGE_EXTENSIONS = Object.keys(LANGUAGE_BY_EXTENSION).sort(
+  (left, right) => right.length - left.length,
+);
+
 /// The Monaco language id for a file, derived from its name's extension.
 export function languageForName(name: string): string {
-  const dot = name.lastIndexOf(".");
+  const lowerName = name.toLowerCase();
+  const extension = LANGUAGE_EXTENSIONS.find((candidate) =>
+    lowerName.endsWith(candidate),
+  );
 
-  if (dot < 0) {
-    return PLAINTEXT;
-  }
-
-  return LANGUAGE_BY_EXTENSION[name.slice(dot).toLowerCase()] ?? PLAINTEXT;
+  return extension === undefined ? PLAINTEXT : LANGUAGE_BY_EXTENSION[extension];
 }
 
 /// Whether the file should be handled by the Python language server.
