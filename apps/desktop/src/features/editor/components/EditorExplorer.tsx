@@ -11,6 +11,8 @@ import {
   PanelLeftClose,
   Plus,
   Save,
+  SidebarHeader,
+  sidebarHeaderIconButtonClassName,
 } from "@/ui";
 
 export type FileNode = {
@@ -51,8 +53,7 @@ const treeFileButtonClassName =
 // Header/footer affordances reuse the shared Button primitive so they match the
 // rest of the app (theme-aware ghost hover + brand press motion) instead of a
 // flat grey rectangle. These tune only sizing on top of the variants.
-const headerIconButtonClassName = "size-7 rounded-cg-md p-0";
-const saveButtonClassName = "size-7 rounded-cg-md p-0";
+const saveButtonClassName = sidebarHeaderIconButtonClassName;
 
 /// The explorer sidebar owns the workspace + file actions (header) and a
 /// status/save footer, wrapping a recursive Python file tree. Single-click
@@ -74,38 +75,40 @@ export function EditorExplorer({
 }: EditorExplorerProps) {
   return (
     <div className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]">
-      <header className="flex min-w-0 items-center gap-0.5 border-b border-cg-border px-2 py-2">
-        <span className="ml-1 min-w-0 flex-1 truncate text-[11px] font-bold uppercase tracking-[0.04em] leading-none text-cg-muted">
-          {workspaceName ?? "Explorer"}
-        </span>
-        <IconButton
-          className={headerIconButtonClassName}
-          label="New file"
-          onClick={onNewFile}
-          title="New file"
-          variant="ghost"
-        >
-          <Plus aria-hidden="true" size={15} strokeWidth={1.9} />
-        </IconButton>
-        <IconButton
-          className={headerIconButtonClassName}
-          label="Open folder"
-          onClick={onOpenFolder}
-          title="Open folder…"
-          variant="ghost"
-        >
-          <FolderOpen aria-hidden="true" size={14} strokeWidth={1.8} />
-        </IconButton>
-        <IconButton
-          className={`${headerIconButtonClassName} ml-0.5`}
-          label="Hide explorer"
-          onClick={onCollapse}
-          title="Hide explorer"
-          variant="ghost"
-        >
-          <PanelLeftClose aria-hidden="true" size={14} strokeWidth={1.8} />
-        </IconButton>
-      </header>
+      <SidebarHeader
+        actions={
+          <>
+            <IconButton
+              className={sidebarHeaderIconButtonClassName}
+              label="New file"
+              onClick={onNewFile}
+              title="New file"
+              variant="ghost"
+            >
+              <Plus aria-hidden="true" size={15} strokeWidth={1.9} />
+            </IconButton>
+            <IconButton
+              className={sidebarHeaderIconButtonClassName}
+              label="Open folder"
+              onClick={onOpenFolder}
+              title="Open folder…"
+              variant="ghost"
+            >
+              <FolderOpen aria-hidden="true" size={14} strokeWidth={1.8} />
+            </IconButton>
+            <IconButton
+              className={`${sidebarHeaderIconButtonClassName} ml-0.5`}
+              label="Hide explorer"
+              onClick={onCollapse}
+              title="Hide explorer"
+              variant="ghost"
+            >
+              <PanelLeftClose aria-hidden="true" size={14} strokeWidth={1.8} />
+            </IconButton>
+          </>
+        }
+        title={workspaceName ?? "Explorer"}
+      />
 
       <div className="min-h-0 min-w-0 overflow-auto p-2">
         {workspaceName === null ? (

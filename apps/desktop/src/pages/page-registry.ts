@@ -1,4 +1,5 @@
 import { aiPage } from "@/features/ai/page";
+import { circuitPage } from "@/features/circuit/page";
 import { dataPage } from "@/features/data/page";
 import { databasePage } from "@/features/database/page";
 import { editorPage } from "@/features/editor/page";
@@ -20,6 +21,7 @@ export {
 export const pageRegistry = [
   aiPage,
   editorPage,
+  circuitPage,
   pythonPage,
   dataPage,
   databasePage,
@@ -33,6 +35,7 @@ export const pageById = Object.fromEntries(
 export const pageByActivity = {
   AI: "ai",
   Editor: "editor",
+  Circuit: "circuit",
   Python: "python",
   Data: "data",
 } as const satisfies Record<TopLevelActivityMode, PageId>;

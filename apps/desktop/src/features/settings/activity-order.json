@@ -1,4 +1,4 @@
 {
-  "order": ["Editor", "Data", "Python", "AI"],
+  "order": ["Circuit", "Editor", "Data", "Python", "AI"],
   "hidden": []
 }

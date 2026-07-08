@@ -1,5 +1,10 @@
 export { BioEngMark, BioEngStudioWordmark } from "@/ui/brand";
 export { Button, IconButton, SendButton } from "@/ui/primitives/button";
+export {
+  sidebarHeaderIconButtonClassName,
+  sidebarRowClassName,
+} from "@/ui/primitives/sidebar-classes";
+export { SidebarHeader, SidebarSectionLabel } from "@/ui/primitives/sidebar";
 export { LoadingBlock, LoadingLine } from "@/ui/primitives/loading";
 export type { LoadingEmphasis } from "@/ui/primitives/loading";
 export type {
@@ -83,6 +88,7 @@ export {
   TimerReset,
   Trash2,
   WandSparkles,
+  Waypoints,
   X,
 } from "@/ui/icons";
 export type { LucideIcon, ProviderLogoId, ProviderLogoProps } from "@/ui/icons";
