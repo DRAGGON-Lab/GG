@@ -279,7 +279,7 @@ function simulationReporterStyles(
       styles[signal] = { label: node.name };
       continue;
     }
-    styles[signal] = { color, label: `${node.name} (${color})` };
+    styles[signal] = { color, label: node.name };
   }
   return styles;
 }
