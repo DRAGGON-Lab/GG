@@ -356,11 +356,17 @@ export type CircuitEdge = {
 
 /// Simulation harness configuration. Drives the generated `Assay`.
 export type SimulationConfig = {
+  /// Loica simulation engine: deterministic ODEs or the stochastic simulation
+  /// algorithm.
+  method: "ode" | "ssa";
   /// Log-spaced supplement dose sweep, one point per sample, plus a zero point.
   doseMin: number;
   doseMax: number;
   dosePoints: number;
   nMeasurements: number;
+  /// Noise-to-signal ratio passed to Loica's ODE runner. A value of 0 disables
+  /// additive noise.
+  nsr: number;
   /// Hours between measurements.
   interval: number;
   /// Gompertz biomass parameters [y0, ymax, um, lambda].
@@ -373,7 +379,9 @@ export const DEFAULT_SIMULATION: SimulationConfig = {
   doseMin: 1e-4,
   dosePoints: 12,
   interval: 0.24,
+  method: "ode",
   nMeasurements: 50,
+  nsr: 0,
 };
 
 export type CircuitDocument = {

@@ -41,6 +41,32 @@ export function SimulationPanel({
         state={envState}
       />
 
+      <Field
+        help={config.method === "ssa" ? "SSA" : "ODE"}
+        label="Simulation method"
+      >
+        <select
+          className="w-full min-w-0 rounded-[6px] border border-cg-border bg-cg-surface px-2 py-1 text-[12px] text-cg-fg outline-none focus:border-cg-accent"
+          onChange={(event) =>
+            onChange({
+              method: event.target.value === "ssa" ? "ssa" : "ode",
+            })
+          }
+          value={config.method}
+        >
+          <option value="ode">Ordinary differential equations</option>
+          <option value="ssa">Stochastic simulation algorithm</option>
+        </select>
+      </Field>
+      {config.method === "ode" ? (
+        <Field help="0 disables" label="ODE noise-to-signal ratio">
+          <NumberInput
+            onChange={(nsr) => onChange({ nsr: Math.max(0, nsr) })}
+            value={config.nsr}
+          />
+        </Field>
+      ) : null}
+
       <Field label="Dose sweep">
         <div className="flex gap-1">
           <NumberInput

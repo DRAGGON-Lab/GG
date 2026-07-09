@@ -147,6 +147,7 @@ function parseSimulation(value: unknown): SimulationConfig {
   const record = value as Record<string, unknown>;
   const num = (key: keyof SimulationConfig, fallback: number) =>
     typeof record[key] === "number" ? (record[key] as number) : fallback;
+  const method = record.method === "ssa" ? "ssa" : DEFAULT_SIMULATION.method;
   const biomass = isNumberArray(record.biomass)
     ? record.biomass
     : DEFAULT_SIMULATION.biomass;
@@ -164,10 +165,12 @@ function parseSimulation(value: unknown): SimulationConfig {
       Math.round(num("dosePoints", DEFAULT_SIMULATION.dosePoints)),
     ),
     interval: num("interval", DEFAULT_SIMULATION.interval),
+    method,
     nMeasurements: Math.max(
       1,
       Math.round(num("nMeasurements", DEFAULT_SIMULATION.nMeasurements)),
     ),
+    nsr: Math.max(0, num("nsr", DEFAULT_SIMULATION.nsr)),
   };
 }
 

@@ -236,9 +236,16 @@ export function buildSimulationSource(document: CircuitDocument): string {
     );
   }
 
+  const runArgs =
+    sim.method === "ssa"
+      ? "stochastic=True"
+      : sim.nsr > 0
+        ? `nsr=${sim.nsr}`
+        : "";
+
   lines.push(
     `assay = Assay(samples, n_measurements=${sim.nMeasurements}, interval=${sim.interval}, biomass_signal_id='od')`,
-    "assay.run()",
+    `assay.run(${runArgs})`,
     "df = assay.measurements",
     "display(df)",
     "",
