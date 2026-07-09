@@ -2,7 +2,7 @@ import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { Fragment, type ReactNode, useState } from "react";
 
-import { Button, ChevronDown, ChevronRight, GripVertical, Save } from "@/ui";
+import { Button, ChevronDown, ChevronRight, Save } from "@/ui";
 
 import {
   DATAFRAME_MIME,
@@ -363,9 +363,6 @@ function ResizableArtifactCard({
       style={{ height: 360, width: "min(100%, 640px)" }}
     >
       {children}
-      <div className="pointer-events-none absolute bottom-1 right-1 rounded-[4px] border border-cg-border bg-cg-editor/90 p-0.5 text-cg-muted opacity-70 transition-opacity group-hover:opacity-100">
-        <GripVertical aria-hidden="true" size={13} className="rotate-45" />
-      </div>
     </div>
   );
 }
