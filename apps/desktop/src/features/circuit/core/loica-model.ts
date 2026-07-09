@@ -24,7 +24,12 @@ export type NodeKind =
 /// fixed-length vectors (`alpha`), and — for `Sum` — nested vectors.
 export type ParamValue = number | number[] | number[][] | string;
 
-export type ParamKind = "string" | "number" | "number[]" | "number[][]";
+export type ParamKind =
+  | "string"
+  | "color"
+  | "number"
+  | "number[]"
+  | "number[][]";
 
 /// Metadata for one editable parameter, driving both the inspector form and the
 /// Loica code generation.
@@ -34,6 +39,8 @@ export type ParamSpec = {
   kind: ParamKind;
   default: ParamValue;
   help?: string;
+  /// UI-only parameters are stored with the node but omitted from generated Loica constructors.
+  uiOnly?: boolean;
   /// Fixed length for a `number[]` parameter (e.g. `Hill1.alpha` is `[basal,
   /// regulated]`). Omitted for variable-length parameters.
   arity?: number;
@@ -124,6 +131,14 @@ export const NODE_SPECS: Record<NodeKind, NodeSpec> = {
         key: "signal_id",
         kind: "string",
         label: "Signal id",
+      },
+      {
+        default: SPECIES_ACCENT.reporter,
+        help: "Canvas glyph color.",
+        key: "color",
+        kind: "color",
+        label: "Color",
+        uiOnly: true,
       },
       {
         default: 0,
@@ -326,9 +341,21 @@ export type CircuitNode = {
   /// Display name and the basis for the generated Python variable.
   name: string;
   params: Record<string, ParamValue>;
+  /// Ordered SBOL database objects connected to this node, e.g. promoter then RBS.
+  sbolParts?: SbolPartRef[];
   /// Number of input handles for a dynamic-input operator (`Sum`).
   inputCount?: number;
   position: { x: number; y: number };
+};
+
+export type SbolPartRef = {
+  iri: string;
+  sbolClass: string;
+  displayId?: string | null;
+  graphId?: string | null;
+  name?: string | null;
+  roleHint?: string;
+  roles: string[];
 };
 
 export type CircuitEdge = {
@@ -341,11 +368,17 @@ export type CircuitEdge = {
 
 /// Simulation harness configuration. Drives the generated `Assay`.
 export type SimulationConfig = {
+  /// Loica simulation engine: deterministic ODEs or the stochastic simulation
+  /// algorithm.
+  method: "ode" | "ssa";
   /// Log-spaced supplement dose sweep, one point per sample, plus a zero point.
   doseMin: number;
   doseMax: number;
   dosePoints: number;
   nMeasurements: number;
+  /// Noise-to-signal ratio passed to Loica's ODE runner. A value of 0 disables
+  /// additive noise.
+  nsr: number;
   /// Hours between measurements.
   interval: number;
   /// Gompertz biomass parameters [y0, ymax, um, lambda].
@@ -358,7 +391,9 @@ export const DEFAULT_SIMULATION: SimulationConfig = {
   doseMin: 1e-4,
   dosePoints: 12,
   interval: 0.24,
+  method: "ode",
   nMeasurements: 50,
+  nsr: 0,
 };
 
 export type CircuitDocument = {

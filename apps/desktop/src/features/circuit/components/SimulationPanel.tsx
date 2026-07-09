@@ -1,5 +1,7 @@
+import { useState } from "react";
+
 import type { SimulationConfig } from "@/features/circuit/core/loica-model";
-import { Button, LoaderCircle, Play, Save } from "@/ui";
+import { Button, FileText, LoaderCircle, Play, Save } from "@/ui";
 
 /// The managed-environment lifecycle as the panel sees it. `unavailable` is the
 /// non-desktop case; the rest mirror `ensureCircuitEnv`'s phases plus `error`.
@@ -19,6 +21,7 @@ export function SimulationPanel({
   envLog,
   envState,
   onChange,
+  onExportSbol,
   onRetry,
   onRun,
   onSaveResults,
@@ -26,6 +29,12 @@ export function SimulationPanel({
   saveError,
   savedStudyId,
   saveState,
+  sbolExportError,
+  sbolExportGraphId,
+  sbolExportIssueCount,
+  sbolExportObjectCount,
+  sbolExportReport,
+  sbolExportState,
 }: {
   canSaveResults: boolean;
   config: SimulationConfig;
@@ -33,6 +42,7 @@ export function SimulationPanel({
   envLog: string[];
   envState: EnvState;
   onChange: (patch: Partial<SimulationConfig>) => void;
+  onExportSbol: () => void;
   onRetry: () => void;
   onRun: () => void;
   onSaveResults: () => void;
@@ -40,8 +50,16 @@ export function SimulationPanel({
   saveError: string | null;
   savedStudyId: number | null;
   saveState: "idle" | "saving" | "saved" | "error";
+  sbolExportError: string | null;
+  sbolExportGraphId: string | null;
+  sbolExportIssueCount: number;
+  sbolExportObjectCount: number;
+  sbolExportReport: string[];
+  sbolExportState: "idle" | "exporting" | "imported" | "error";
 }) {
   const canRun = envState === "ready" && !running;
+  const canExportSbol =
+    envState === "ready" && !running && sbolExportState !== "exporting";
   return (
     <div className="flex min-h-0 flex-col gap-3 p-3">
       <EnvBanner
@@ -50,6 +68,32 @@ export function SimulationPanel({
         onRetry={onRetry}
         state={envState}
       />
+
+      <Field
+        help={config.method === "ssa" ? "SSA" : "ODE"}
+        label="Simulation method"
+      >
+        <select
+          className="w-full min-w-0 rounded-[6px] border border-cg-border bg-cg-surface px-2 py-1 text-[12px] text-cg-fg outline-none focus:border-cg-accent"
+          onChange={(event) =>
+            onChange({
+              method: event.target.value === "ssa" ? "ssa" : "ode",
+            })
+          }
+          value={config.method}
+        >
+          <option value="ode">Ordinary differential equations</option>
+          <option value="ssa">Stochastic simulation algorithm</option>
+        </select>
+      </Field>
+      {config.method === "ode" ? (
+        <Field help="0 disables" label="ODE noise-to-signal ratio">
+          <NumberInput
+            onChange={(nsr) => onChange({ nsr: Math.max(0, nsr) })}
+            value={config.nsr}
+          />
+        </Field>
+      ) : null}
 
       <Field label="Dose sweep">
         <div className="flex gap-1">
@@ -146,6 +190,86 @@ export function SimulationPanel({
             <span className="text-[10.5px] text-cg-danger">{saveError}</span>
           ) : null}
         </div>
+      ) : null}
+
+      <SbolExportSection
+        canExport={canExportSbol}
+        error={sbolExportError}
+        graphId={sbolExportGraphId}
+        issueCount={sbolExportIssueCount}
+        objectCount={sbolExportObjectCount}
+        onExport={onExportSbol}
+        report={sbolExportReport}
+        state={sbolExportState}
+      />
+    </div>
+  );
+}
+
+function SbolExportSection({
+  canExport,
+  error,
+  graphId,
+  issueCount,
+  objectCount,
+  onExport,
+  report,
+  state,
+}: {
+  canExport: boolean;
+  error: string | null;
+  graphId: string | null;
+  issueCount: number;
+  objectCount: number;
+  onExport: () => void;
+  report: string[];
+  state: "idle" | "exporting" | "imported" | "error";
+}) {
+  const [showReport, setShowReport] = useState(false);
+  const hasReport = issueCount > 0;
+  return (
+    <div className="mt-auto flex flex-col gap-1 border-t border-cg-border pt-3">
+      <Button
+        className="justify-center"
+        disabled={!canExport}
+        onClick={onExport}
+        size="sm"
+        variant="ghost"
+      >
+        {state === "exporting" ? (
+          <LoaderCircle aria-hidden="true" className="animate-spin" size={14} />
+        ) : (
+          <FileText aria-hidden="true" size={14} />
+        )}
+        {state === "exporting" ? "Exporting SBOL…" : "Export SBOL to DB"}
+      </Button>
+      {state === "imported" && graphId ? (
+        <span className="text-[10.5px] text-cg-muted">
+          Imported graph {graphId} with {objectCount} objects.
+        </span>
+      ) : null}
+      {hasReport ? (
+        <button
+          className="self-start text-left text-[10.5px] text-cg-danger underline decoration-cg-danger/40 underline-offset-2"
+          onClick={() => setShowReport((value) => !value)}
+          type="button"
+        >
+          {showReport ? "Hide" : "Show"} SBOL validation report ({issueCount})
+        </button>
+      ) : state === "imported" ? (
+        <span className="text-[10.5px] text-cg-muted">
+          SBOL validation passed.
+        </span>
+      ) : null}
+      {showReport && hasReport ? (
+        <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-[5px] border border-cg-danger/30 bg-cg-danger/10 p-2 font-mono text-[10px] leading-snug text-cg-danger">
+          {report.length > 0
+            ? report.join("\n")
+            : "Validation issues were reported without details."}
+        </pre>
+      ) : null}
+      {state === "error" && error ? (
+        <span className="text-[10.5px] text-cg-danger">{error}</span>
       ) : null}
     </div>
   );

@@ -9,6 +9,7 @@ import type {
   CircuitNode,
   NodeKind,
   ParamValue,
+  SbolPartRef,
   SimulationConfig,
 } from "@/features/circuit/core/loica-model";
 import type { TextEditorSettings } from "@/features/settings";
@@ -46,6 +47,7 @@ export type CircuitPageContextValue = {
   selectedNode: CircuitNode | null;
   renameNode: (name: string) => void;
   changeNodeParam: (key: string, value: ParamValue) => void;
+  changeNodeSbolParts: (parts: SbolPartRef[]) => void;
   changeInputCount: (count: number) => void;
   replaceNodeFromCode: (patch: {
     name?: string;
@@ -65,6 +67,13 @@ export type CircuitPageContextValue = {
   retryEnv: () => void;
   runSimulation: () => void;
   running: boolean;
+  exportSbol: () => void;
+  sbolExportError: string | null;
+  sbolExportGraphId: string | null;
+  sbolExportIssueCount: number;
+  sbolExportObjectCount: number;
+  sbolExportReport: string[];
+  sbolExportState: "idle" | "exporting" | "imported" | "error";
 
   // Persisting results to the local Flapjack store
   canSaveResults: boolean;

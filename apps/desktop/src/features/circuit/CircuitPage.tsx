@@ -50,9 +50,11 @@ import {
   type RunLine,
 } from "@/features/circuit/core/circuit-run";
 import {
+  buildSbolExportSource,
   generateScript,
   nodeSnippet,
   parseParamsFromCode,
+  SBOL_EXPORT_MIME,
 } from "@/features/circuit/core/codegen";
 import {
   type AppEdge,
@@ -70,8 +72,10 @@ import {
   type NodeKind,
   type ParamValue,
   resizedSumParams,
+  type SbolPartRef,
   type SimulationConfig,
 } from "@/features/circuit/core/loica-model";
+import { importDocument } from "@/features/data/core/data-service";
 import { parseDisplay } from "@/features/editor/components/artifacts/display";
 import { importStudy } from "@/features/flapjack/core/flapjack-service";
 import type { ExperimentManifest } from "@/features/flapjack/core/flapjack-types";
@@ -83,6 +87,19 @@ import { dockviewThemeByMode } from "@/workbench/theme";
 function baseName(path: string): string {
   const segments = path.split(/[\\/]/);
   return segments[segments.length - 1] || path;
+}
+
+function isSbolExportPayload(value: unknown): value is SbolExportPayload {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.rdfXml === "string" &&
+    Array.isArray(record.identities) &&
+    typeof record.validationCount === "number" &&
+    Array.isArray(record.validationReport)
+  );
 }
 
 const CIRCUIT_DOCK_COMPONENTS = { circuitPanel: CircuitDockPanel };
@@ -98,6 +115,13 @@ const OUTPUT_PANEL_ID = "circuit-output";
 // so the generated script is readable without a manual resize each time.
 const TOOL_GROUP_WIDTH = 320;
 const CODE_GROUP_WIDTH = 640;
+
+type SbolExportPayload = {
+  identities: string[];
+  rdfXml: string;
+  validationCount: number;
+  validationReport: string[];
+};
 
 // Panel renderers are module constants that read live page state from context,
 // so dockview never needs to re-run them when state changes.
@@ -162,6 +186,16 @@ function CircuitWorkspace() {
   >("idle");
   const [savedStudyId, setSavedStudyId] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [sbolExportState, setSbolExportState] = useState<
+    "idle" | "exporting" | "imported" | "error"
+  >("idle");
+  const [sbolExportError, setSbolExportError] = useState<string | null>(null);
+  const [sbolExportGraphId, setSbolExportGraphId] = useState<string | null>(
+    null,
+  );
+  const [sbolExportIssueCount, setSbolExportIssueCount] = useState(0);
+  const [sbolExportObjectCount, setSbolExportObjectCount] = useState(0);
+  const [sbolExportReport, setSbolExportReport] = useState<string[]>([]);
 
   const addCounterRef = useRef(0);
   const envRootRef = useRef<string | null>(null);
@@ -551,6 +585,89 @@ function CircuitWorkspace() {
     }
   }, [ensureEnv, generatedScript, handleRunLine, openOutputPanel, running]);
 
+  const exportSbol = useCallback(async () => {
+    if (running || sbolExportState === "exporting") {
+      return;
+    }
+    setRunLines([]);
+    setExitCode(null);
+    setSbolExportState("exporting");
+    setSbolExportError(null);
+    setSbolExportGraphId(null);
+    setSbolExportIssueCount(0);
+    setSbolExportObjectCount(0);
+    setSbolExportReport([]);
+    openOutputPanel();
+    const root = await ensureEnv();
+    if (!root) {
+      setRunLines((current) => [
+        ...current,
+        { stream: "stderr", text: "Simulation environment is not ready." },
+      ]);
+      setSbolExportError("Simulation environment is not ready.");
+      setSbolExportState("error");
+      return;
+    }
+
+    const payloadRef: { current: SbolExportPayload | null } = {
+      current: null,
+    };
+    try {
+      const script = buildSbolExportSource(document);
+      const result = await runCircuitScript(script, root, (line) => {
+        if (line.stream === "display") {
+          const bundle = parseDisplay(line.text);
+          const candidate = bundle?.data?.[SBOL_EXPORT_MIME];
+          if (isSbolExportPayload(candidate)) {
+            payloadRef.current = candidate;
+            return;
+          }
+        }
+        setRunLines((current) => [...current, line]);
+      });
+      setExitCode(result.exitCode);
+      if (result.exitCode !== 0) {
+        throw new Error("SBOL export script failed.");
+      }
+      const payload = payloadRef.current;
+      if (!payload) {
+        throw new Error("SBOL export did not produce an SBOL document.");
+      }
+      setSbolExportIssueCount(payload.validationCount);
+      setSbolExportObjectCount(payload.identities.length);
+      setSbolExportReport(payload.validationReport);
+      const report = await importDocument({
+        body: payload.rdfXml,
+        description: "Generated from the Circuit workspace using LOICA.",
+        format: "rdfxml",
+        name: `Circuit SBOL: ${filePath ? baseName(filePath) : "Untitled circuit"}`,
+        sourceUri: "bioeng://circuit/to-sbol",
+      });
+      setSbolExportGraphId(report.graphId);
+      setSbolExportObjectCount(report.objectCount);
+      setSbolExportState("imported");
+      setRunLines((current) => [
+        ...current,
+        {
+          stream: "stdout",
+          text: `Imported SBOL graph ${report.graphId} (${report.objectCount} objects, ${report.tripleCount} triples).`,
+        },
+      ]);
+    } catch (error) {
+      setSbolExportError(
+        error instanceof Error ? error.message : "Could not export SBOL.",
+      );
+      setSbolExportState("error");
+    }
+  }, [
+    document,
+    ensureEnv,
+    filePath,
+    openOutputPanel,
+    running,
+    sbolExportState,
+  ]);
+
   // Persist the last run's results into the local Flapjack store.
   const saveResults = useCallback(async () => {
     if (!manifest || saveState === "saving") {
@@ -661,6 +778,8 @@ function CircuitWorkspace() {
         selectedNodeId && changeInputCount(selectedNodeId, count),
       changeNodeParam: (key, value) =>
         selectedNodeId && updateNodeParam(selectedNodeId, key, value),
+      changeNodeSbolParts: (sbolParts: SbolPartRef[]) =>
+        selectedNodeId && updateNodeData(selectedNodeId, { sbolParts }),
       circuitName: filePath ? baseName(filePath) : "Untitled circuit",
       deleteSelectedNode: () => selectedNodeId && deleteNode(selectedNodeId),
       dirty,
@@ -669,6 +788,7 @@ function CircuitWorkspace() {
       envError,
       envLog,
       envState,
+      exportSbol: () => void exportSbol(),
       exitCode,
       generatedScript,
       getNodeSnippet,
@@ -695,6 +815,12 @@ function CircuitWorkspace() {
       saveResults: () => void saveResults(),
       saveState,
       savedStudyId,
+      sbolExportError,
+      sbolExportGraphId,
+      sbolExportIssueCount,
+      sbolExportObjectCount,
+      sbolExportReport,
+      sbolExportState,
       canSaveResults: manifest !== null,
       selectedNode: selectedDomainNode,
       simulation,
@@ -713,6 +839,7 @@ function CircuitWorkspace() {
       envError,
       envLog,
       envState,
+      exportSbol,
       exitCode,
       filePath,
       generatedScript,
@@ -736,6 +863,12 @@ function CircuitWorkspace() {
       saveResults,
       saveState,
       savedStudyId,
+      sbolExportError,
+      sbolExportGraphId,
+      sbolExportIssueCount,
+      sbolExportObjectCount,
+      sbolExportReport,
+      sbolExportState,
       selectedDomainNode,
       selectedNodeId,
       settings.textEditor,
@@ -815,6 +948,7 @@ function NodePanel() {
         onParamChange={page.changeNodeParam}
         onRename={page.renameNode}
         onReplaceFromCode={page.replaceNodeFromCode}
+        onSbolPartsChange={page.changeNodeSbolParts}
         resolvedTheme={page.resolvedTheme}
         textEditorSettings={page.textEditorSettings}
       />
@@ -849,6 +983,7 @@ function SimulateTabPanel() {
         envLog={page.envLog}
         envState={page.envState}
         onChange={page.updateSimulation}
+        onExportSbol={page.exportSbol}
         onRetry={page.retryEnv}
         onRun={page.runSimulation}
         onSaveResults={page.saveResults}
@@ -856,6 +991,12 @@ function SimulateTabPanel() {
         saveError={page.saveError}
         savedStudyId={page.savedStudyId}
         saveState={page.saveState}
+        sbolExportError={page.sbolExportError}
+        sbolExportGraphId={page.sbolExportGraphId}
+        sbolExportIssueCount={page.sbolExportIssueCount}
+        sbolExportObjectCount={page.sbolExportObjectCount}
+        sbolExportReport={page.sbolExportReport}
+        sbolExportState={page.sbolExportState}
       />
     </div>
   );

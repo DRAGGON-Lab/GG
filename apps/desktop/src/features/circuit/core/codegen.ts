@@ -13,6 +13,8 @@ import {
   toPythonVar,
 } from "@/features/circuit/core/loica-model";
 
+export const SBOL_EXPORT_MIME = "application/vnd.bioeng.sbol-export+json";
+
 /// Resolved wiring for one operator: the variable names feeding its inputs (in
 /// handle order) and the variable names it outputs to.
 export type OperatorWiring = {
@@ -64,6 +66,31 @@ export function pyLiteral(value: ParamValue): string {
   return `[${value.map((entry) => pyLiteral(entry as ParamValue)).join(", ")}]`;
 }
 
+function pyDataLiteral(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "None";
+  }
+  if (typeof value === "string") {
+    return pyLiteral(value);
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "None";
+  }
+  if (typeof value === "boolean") {
+    return value ? "True" : "False";
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => pyDataLiteral(entry)).join(", ")}]`;
+  }
+  if (typeof value === "object") {
+    return `{${Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => `${pyLiteral(key)}: ${pyDataLiteral(entry)}`)
+      .join(", ")}}`;
+  }
+  return "None";
+}
+
 /// A single-value or list argument for an operator's `input=` / `output=`,
 /// depending on how many endpoints the wiring resolved. `None` when unwired.
 function wiringArg(vars: string[]): string {
@@ -81,6 +108,7 @@ function wiringArg(vars: string[]): string {
 export function constructorCall(
   node: CircuitNode,
   wiring: OperatorWiring | null,
+  sbolCompArg: string | null = null,
 ): string {
   const spec = getNodeSpec(node.kind);
   const args: string[] = [];
@@ -96,6 +124,9 @@ export function constructorCall(
   }
 
   for (const paramSpec of spec.params) {
+    if (paramSpec.uiOnly) {
+      continue;
+    }
     const value = node.params[paramSpec.key];
     if (value === undefined) {
       continue;
@@ -108,11 +139,40 @@ export function constructorCall(
     args.push(`${paramSpec.key}=${pyLiteral(value)}`);
   }
 
+  if (sbolCompArg) {
+    args.push(`sbol_comp=${sbolCompArg}`);
+  } else {
+    const sbolComp = sbolCompMetadata(node);
+    if (sbolComp) {
+      args.push(`sbol_comp=${pyDataLiteral(sbolComp)}`);
+    }
+  }
+
   if (spec.category === "operator") {
     args.push(`name=${pyLiteral(node.name)}`);
   }
 
   return `${spec.loicaClass}(${args.join(", ")})`;
+}
+
+function sbolCompMetadata(node: CircuitNode): Record<string, unknown> | null {
+  const parts = node.sbolParts ?? [];
+  if (parts.length === 0) {
+    return null;
+  }
+  return {
+    parts: parts.map((part, index) => ({
+      display_id: part.displayId ?? null,
+      graph_id: part.graphId ?? null,
+      iri: part.iri,
+      name: part.name ?? null,
+      order: index,
+      role: part.roleHint ?? null,
+      roles: part.roles,
+      sbol_class: part.sbolClass,
+    })),
+    source: "bioeng-sbol-db",
+  };
 }
 
 /// The assignment line for a single node within a document, with wiring resolved
@@ -135,15 +195,22 @@ export function nodeAssignment(
   node: CircuitNode,
   varName: string,
   wiring: OperatorWiring | null,
+  sbolCompArg: string | null = null,
 ): string {
-  return `${varName} = ${constructorCall(node, wiring)}`;
+  return `${varName} = ${constructorCall(node, wiring, sbolCompArg)}`;
 }
 
 /// Build the network-construction portion of the script (imports through
 /// `GeneticNetwork` assembly), without the simulation harness.
 export function buildNetworkSource(document: CircuitDocument): string {
   const varById = assignVarNames(document);
-  const lines: string[] = ["import numpy as np", "from loica import *", ""];
+  const lines: string[] = [
+    "import numpy as np",
+    "import sbol3",
+    "from loica import *",
+    "",
+    ...buildSbolSetupSource(document, varById),
+  ];
 
   const species = document.nodes.filter((node) => !isOperator(node.kind));
   const operators = document.nodes.filter((node) => isOperator(node.kind));
@@ -151,7 +218,8 @@ export function buildNetworkSource(document: CircuitDocument): string {
   if (species.length > 0) {
     lines.push("# --- species ---");
     for (const node of species) {
-      lines.push(nodeAssignment(node, varById.get(node.id)!, null));
+      const varName = varById.get(node.id)!;
+      lines.push(nodeAssignment(node, varName, null, sbolVarName(varName)));
     }
     lines.push("");
   }
@@ -160,7 +228,8 @@ export function buildNetworkSource(document: CircuitDocument): string {
     lines.push("# --- operators ---");
     for (const node of operators) {
       const wiring = resolveWiring(document, node, varById);
-      lines.push(nodeAssignment(node, varById.get(node.id)!, wiring));
+      const varName = varById.get(node.id)!;
+      lines.push(nodeAssignment(node, varName, wiring, sbolVarName(varName)));
     }
     lines.push("");
   }
@@ -188,11 +257,102 @@ export function buildNetworkSource(document: CircuitDocument): string {
   return `${lines.join("\n")}\n`;
 }
 
+function buildSbolSetupSource(
+  document: CircuitDocument,
+  varById: Map<string, string>,
+): string[] {
+  const lines: string[] = [
+    "# --- SBOL components ---",
+    "sbol3.set_namespace('https://bioeng.studio/circuit')",
+    "sbol_doc = sbol3.Document()",
+    "_bioeng_sbol_components = {}",
+    "",
+    "def _bioeng_sbol_role_uri(role):",
+    "    mapping = {",
+    "        'promoter': sbol3.SO_PROMOTER,",
+    "        'rbs': sbol3.SO_RBS,",
+    "        'cds': sbol3.SO_CDS,",
+    "        'terminator': sbol3.SO_TERMINATOR,",
+    "        'engineered region': sbol3.SO_ENGINEERED_REGION,",
+    "        'stability': sbol3.SO_CDS,",
+    "    }",
+    "    return mapping.get(role)",
+    "",
+    "def _bioeng_sbol_type_uri(node_kind, role):",
+    "    if node_kind == 'supplement':",
+    "        return sbol3.SBO_SIMPLE_CHEMICAL",
+    "    if role == 'rna':",
+    "        return sbol3.SBO_RNA",
+    "    if role == 'protein':",
+    "        return sbol3.SBO_PROTEIN",
+    "    return sbol3.SBO_DNA",
+    "",
+    "def _bioeng_sbol_component(identity, name, node_kind, role, roles):",
+    "    if identity in _bioeng_sbol_components:",
+    "        return _bioeng_sbol_components[identity]",
+    "    role_values = []",
+    "    for value in roles or []:",
+    "        if value and value not in role_values:",
+    "            role_values.append(value)",
+    "    role_uri = _bioeng_sbol_role_uri(role)",
+    "    if role_uri and role_uri not in role_values:",
+    "        role_values.append(role_uri)",
+    "    comp = sbol3.Component(identity, _bioeng_sbol_type_uri(node_kind, role), roles=role_values or None, name=name)",
+    "    sbol_doc.add(comp)",
+    "    _bioeng_sbol_components[identity] = comp",
+    "    return comp",
+    "",
+    "def _bioeng_node_sbol_comp(identity, name, node_kind, parts):",
+    "    if not parts:",
+    "        return _bioeng_sbol_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
+    "    part_components = []",
+    "    for part in parts:",
+    "        part_components.append(_bioeng_sbol_component(",
+    "            part.get('iri') or part.get('display_id'),",
+    "            part.get('name') or part.get('display_id'),",
+    "            node_kind,",
+    "            part.get('role'),",
+    "            part.get('roles') or [],",
+    "        ))",
+    "    if len(part_components) == 1:",
+    "        return part_components[0]",
+    "    comp = _bioeng_sbol_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
+    "    comp.features = [sbol3.SubComponent(part) for part in part_components]",
+    "    comp.constraints = [sbol3.Constraint(sbol3.SBOL_PRECEDES, comp.features[i], comp.features[i + 1]) for i in range(len(comp.features) - 1)]",
+    "    return comp",
+    "",
+  ];
+
+  for (const node of document.nodes) {
+    const varName = varById.get(node.id);
+    if (!varName) {
+      continue;
+    }
+    lines.push(
+      `${sbolVarName(varName)} = _bioeng_node_sbol_comp(${pyLiteral(
+        sbolNodeIdentity(node),
+      )}, ${pyLiteral(node.name)}, ${pyLiteral(node.kind)}, ${pyDataLiteral(
+        sbolCompMetadata(node)?.parts ?? [],
+      )})`,
+    );
+  }
+  lines.push("");
+  return lines;
+}
+
+function sbolVarName(varName: string): string {
+  return `${varName}_sbol`;
+}
+
+function sbolNodeIdentity(node: CircuitNode): string {
+  return `bioeng_${node.kind}_${node.id.replace(/[^A-Za-z0-9_]/g, "_")}`;
+}
+
 /// Build the simulation harness: a Gompertz metabolism, one sample per point of
 /// a log-spaced dose sweep over the first supplement (or a single baseline
 /// sample when the circuit has no supplement), an `Assay`, and rich output — the
-/// measurements DataFrame plus a reporter timecourse figure. Both render in the
-/// Output panel via the runner's `display()` and matplotlib capture.
+/// measurements DataFrame plus an interactive reporter timecourse figure. Both
+/// render in the Output panel via the runner's rich `display()` protocol.
 export function buildSimulationSource(document: CircuitDocument): string {
   const varById = assignVarNames(document);
   const sim = document.simulation;
@@ -201,6 +361,7 @@ export function buildSimulationSource(document: CircuitDocument): string {
   const supplements = document.nodes.filter(
     (node) => node.kind === "supplement",
   );
+  const reporterStyles = simulationReporterStyles(document);
   const firstSupplement = supplements[0]
     ? varById.get(supplements[0].id)
     : null;
@@ -224,7 +385,9 @@ export function buildSimulationSource(document: CircuitDocument): string {
   const lines: string[] = [
     "",
     "# --- simulation ---",
-    "import matplotlib.pyplot as plt",
+    "import plotly.graph_objects as go",
+    "",
+    `reporter_styles = ${JSON.stringify(reporterStyles)}`,
     "",
     `metab = SimulatedMetabolism('sim', lambda t: gompertz(t, ${y0}, ${ymax}, ${um}, ${lag}), lambda t: gompertz_growth_rate(t, ${y0}, ${ymax}, ${um}, ${lag}))`,
   ];
@@ -249,20 +412,56 @@ export function buildSimulationSource(document: CircuitDocument): string {
     );
   }
 
+  const runArgs =
+    sim.method === "ssa"
+      ? "stochastic=True"
+      : sim.nsr > 0
+        ? `nsr=${sim.nsr}`
+        : "";
+
   lines.push(
     `assay = Assay(samples, n_measurements=${sim.nMeasurements}, interval=${sim.interval}, biomass_signal_id='od')`,
-    "assay.run()",
+    `assay.run(${runArgs})`,
     "df = assay.measurements",
     "display(df)",
     "",
     "signals = df[df.Signal != 'Biomass']",
     "if len(signals):",
-    "    fig, ax = plt.subplots(figsize=(6, 4))",
+    "    fig = go.Figure()",
+    "    labeled_signals = set()",
     "    for (sample_id, signal), group in signals.groupby(['Sample', 'Signal']):",
-    "        ax.plot(group.Time, group.Measurement, linewidth=1)",
-    "    ax.set_xlabel('Time (h)')",
-    "    ax.set_ylabel('Reporter signal')",
-    "    ax.set_title('Reporter timecourse (one line per sample)')",
+    "        style = reporter_styles.get(signal, {})",
+    "        label = style.get('label', signal)",
+    "        show_legend = signal not in labeled_signals",
+    "        fig.add_trace(go.Scatter(",
+    "            x=group.Time,",
+    "            y=group.Measurement,",
+    "            mode='lines+markers',",
+    "            name=label,",
+    "            legendgroup=signal,",
+    "            showlegend=show_legend,",
+    "            line=dict(color=style.get('color'), width=1.8),",
+    "            marker=dict(size=4),",
+    "            customdata=np.stack([group.Sample, group.Signal], axis=-1),",
+    "            hovertemplate='Time: %{x:.3g} h<br>Measurement: %{y:.3g}<br>Sample: %{customdata[0]}<br>Signal: %{customdata[1]}<extra></extra>',",
+    "        ))",
+    "        labeled_signals.add(signal)",
+    "    fig.update_layout(",
+    "        title='Reporter timecourse (one line per sample)',",
+    "        template='plotly_white',",
+    "        height=420,",
+    "        margin=dict(l=52, r=24, t=56, b=48),",
+    "        paper_bgcolor='white',",
+    "        plot_bgcolor='white',",
+    "        font=dict(family='Inter, system-ui, sans-serif', size=12, color='#24313d'),",
+    "        hovermode='closest',",
+    "        legend=dict(title='Reporter', orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),",
+    "        xaxis=dict(title='Time (h)', showgrid=True, gridcolor='#e5e7eb', zeroline=False, rangeslider=dict(visible=True)),",
+    "        yaxis=dict(title='Reporter signal', showgrid=True, gridcolor='#e5e7eb', zeroline=False),",
+    "    )",
+    "    fig.update_xaxes(showspikes=True, spikemode='across', spikesnap='cursor', spikedash='dot', spikecolor='#64748b')",
+    "    fig.update_yaxes(showspikes=True, spikemode='across', spikesnap='cursor', spikedash='dot', spikecolor='#64748b')",
+    "    display({'text/html': fig.to_html(include_plotlyjs='cdn', full_html=False, config={'responsive': True, 'displaylogo': False, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape'], 'toImageButtonOptions': {'format': 'png', 'filename': 'reporter-timecourse'}})})",
   );
 
   // Emit the experiment as a Flapjack manifest under a custom MIME type. The
@@ -304,8 +503,65 @@ export function buildSimulationSource(document: CircuitDocument): string {
   return `${lines.join("\n")}\n`;
 }
 
+function simulationReporterStyles(
+  document: CircuitDocument,
+): Record<string, Record<string, string>> {
+  const styles: Record<string, Record<string, string>> = {};
+  for (const node of document.nodes) {
+    if (node.kind !== "reporter") {
+      continue;
+    }
+    const signalId = node.params.signal_id;
+    const signal =
+      typeof signalId === "string" && signalId.trim() !== ""
+        ? signalId
+        : node.name;
+    const color = node.params.color;
+    if (typeof color !== "string" || !/^#[0-9a-f]{6}$/iu.test(color)) {
+      styles[signal] = { label: node.name };
+      continue;
+    }
+    styles[signal] = { color, label: node.name };
+  }
+  return styles;
+}
+
 function round(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+/// Build a runnable script that converts the generated `GeneticNetwork` to SBOL,
+/// validates it, and emits RDF/XML plus the validation report as a MIME payload.
+export function buildSbolExportSource(document: CircuitDocument): string {
+  const lines = [
+    buildNetworkSource(document).trimEnd(),
+    "",
+    "# --- SBOL export ---",
+    "sbol_export_doc = network.to_sbol(sbol_doc=sbol_doc)",
+    "sbol_identities = []",
+    "for obj in sbol_export_doc.objects:",
+    "    sbol_identities.append(str(obj.identity))",
+    "    print(obj.identity)",
+    "report_sbol3 = sbol_export_doc.validate()",
+    "validation_count = len(report_sbol3)",
+    "print(validation_count)",
+    "validation_report = []",
+    "for error in report_sbol3.errors:",
+    "    validation_report.append('ERROR: ' + str(error))",
+    "for warning in report_sbol3.warnings:",
+    "    validation_report.append('WARNING: ' + str(warning))",
+    "sbol_rdf_xml = sbol_export_doc.write_string(sbol3.RDF_XML)",
+    "display({",
+    `    '${SBOL_EXPORT_MIME}': {`,
+    "        'rdfXml': sbol_rdf_xml,",
+    "        'identities': sbol_identities,",
+    "        'validationCount': validation_count,",
+    "        'validationReport': validation_report,",
+    "    },",
+    "    'text/plain': f'SBOL export: {len(sbol_identities)} objects, {validation_count} validation issues',",
+    "})",
+  ];
+  return `${lines.join("\n")}\n`;
 }
 
 /// The complete runnable script: network construction followed by the
@@ -336,7 +592,9 @@ export function parseParamsFromCode(
   const argList = code.slice(open + 1, close);
   const args = splitTopLevel(argList);
   const spec = getNodeSpec(kind);
-  const paramKinds = new Map(spec.params.map((p) => [p.key, p.kind]));
+  const paramKinds = new Map(
+    spec.params.filter((param) => !param.uiOnly).map((p) => [p.key, p.kind]),
+  );
 
   for (const arg of args) {
     const eq = arg.indexOf("=");

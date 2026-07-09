@@ -78,6 +78,9 @@ def _dataframe_bundle(frame):
 
 def _mimebundle(obj):
     """The richest MIME bundle for ``obj`` via standard representation methods."""
+    if isinstance(obj, dict) and any(isinstance(key, str) and "/" in key for key in obj):
+        return dict(obj)
+
     if type(obj).__name__ == "Figure" and hasattr(obj, "savefig"):
         return {"image/png": _figure_png(obj), "text/plain": "<Figure>"}
 

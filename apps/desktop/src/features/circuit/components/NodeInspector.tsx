@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { LoicaCodeEditor } from "@/features/circuit/components/LoicaCodeEditor";
 import { NodeEquation } from "@/features/circuit/components/NodeEquation";
+import { NodeSbolParts } from "@/features/circuit/components/NodeSbolParts";
 import {
   assignVarNames,
   constructorCall,
@@ -14,6 +15,7 @@ import {
   getNodeSpec,
   type ParamSpec,
   type ParamValue,
+  type SbolPartRef,
 } from "@/features/circuit/core/loica-model";
 import type { TextEditorSettings } from "@/features/settings";
 import { type ResolvedTheme, Trash2 } from "@/ui";
@@ -30,6 +32,7 @@ type NodeInspectorProps = {
     name?: string;
     params: Record<string, ParamValue>;
   }) => void;
+  onSbolPartsChange: (parts: SbolPartRef[]) => void;
   resolvedTheme: ResolvedTheme;
   textEditorSettings: TextEditorSettings;
 };
@@ -42,6 +45,7 @@ export function NodeInspector({
   onParamChange,
   onRename,
   onReplaceFromCode,
+  onSbolPartsChange,
   resolvedTheme,
   textEditorSettings,
 }: NodeInspectorProps) {
@@ -147,6 +151,10 @@ export function NodeInspector({
           {spec.params.length === 0 ? (
             <p className="text-[11px] text-cg-muted">No parameters.</p>
           ) : null}
+          <NodeSbolParts
+            onChange={onSbolPartsChange}
+            parts={node.sbolParts ?? []}
+          />
         </div>
       ) : (
         <div className="flex min-h-[160px] flex-col gap-1.5">
@@ -359,6 +367,27 @@ function ParamInput({
         spellCheck={false}
         value={typeof value === "string" ? value : ""}
       />
+    );
+  }
+
+  if (spec.kind === "color") {
+    const color = typeof value === "string" ? value : "#4fd67f";
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          aria-label={spec.label}
+          className="h-7 w-10 cursor-pointer rounded-[6px] border border-cg-border bg-cg-surface p-0.5"
+          onChange={(event) => onChange(event.target.value)}
+          type="color"
+          value={color}
+        />
+        <input
+          className="min-w-0 flex-1 rounded-[6px] border border-cg-border bg-cg-surface px-2 py-1 font-mono text-[12px] text-cg-fg outline-none focus:border-cg-accent"
+          onChange={(event) => onChange(event.target.value)}
+          spellCheck={false}
+          value={color}
+        />
+      </div>
     );
   }
 
