@@ -13,7 +13,7 @@ import {
 
 /// Circuit owns a dedicated, app-managed Python environment — the user never
 /// opens a folder or manages packages. It lives under the app's local data
-/// directory and holds a `.venv` with loica (and matplotlib) installed on first
+/// directory and holds a `.venv` with loica and Plotly installed on first
 /// use, then reused on every later run.
 const CIRCUIT_ENV_DIR = "circuit-runtime";
 
@@ -23,10 +23,10 @@ const CIRCUIT_ENV_DIR = "circuit-runtime";
 const LOICA_REQUIREMENT =
   "loica @ git+https://github.com/RudgeLab/LOICA.git@c2b65b30938f5f67a4fa215689efbb418510c422";
 
-/// Packages the managed environment needs for circuit simulation. matplotlib
-/// backs the reporter plot; loica is the simulation engine.
-const REQUIRED_PACKAGES = [LOICA_REQUIREMENT, "matplotlib"];
-const REQUIRED_NAMES = ["loica", "matplotlib"];
+/// Packages the managed environment needs for circuit simulation. Plotly backs
+/// the interactive reporter plot; loica is the simulation engine.
+const REQUIRED_PACKAGES = [LOICA_REQUIREMENT, "plotly"];
+const REQUIRED_NAMES = ["loica", "plotly"];
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
