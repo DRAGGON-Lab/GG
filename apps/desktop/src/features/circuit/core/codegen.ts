@@ -194,8 +194,8 @@ export function buildNetworkSource(document: CircuitDocument): string {
 /// Build the simulation harness: a Gompertz metabolism, one sample per point of
 /// a log-spaced dose sweep over the first supplement (or a single baseline
 /// sample when the circuit has no supplement), an `Assay`, and rich output — the
-/// measurements DataFrame plus a reporter timecourse figure. Both render in the
-/// Output panel via the runner's `display()` and matplotlib capture.
+/// measurements DataFrame plus an interactive reporter timecourse figure. Both
+/// render in the Output panel via the runner's rich `display()` protocol.
 export function buildSimulationSource(document: CircuitDocument): string {
   const varById = assignVarNames(document);
   const sim = document.simulation;
@@ -212,7 +212,7 @@ export function buildSimulationSource(document: CircuitDocument): string {
   const lines: string[] = [
     "",
     "# --- simulation ---",
-    "import matplotlib.pyplot as plt",
+    "import plotly.graph_objects as go",
     "",
     `reporter_styles = ${JSON.stringify(reporterStyles)}`,
     "",
@@ -244,18 +244,41 @@ export function buildSimulationSource(document: CircuitDocument): string {
     "",
     "signals = df[df.Signal != 'Biomass']",
     "if len(signals):",
-    "    fig, ax = plt.subplots(figsize=(6, 4))",
+    "    fig = go.Figure()",
     "    labeled_signals = set()",
     "    for (sample_id, signal), group in signals.groupby(['Sample', 'Signal']):",
     "        style = reporter_styles.get(signal, {})",
-    "        label = style.get('label', signal) if signal not in labeled_signals else None",
-    "        ax.plot(group.Time, group.Measurement, color=style.get('color'), label=label, linewidth=1)",
+    "        label = style.get('label', signal)",
+    "        show_legend = signal not in labeled_signals",
+    "        fig.add_trace(go.Scatter(",
+    "            x=group.Time,",
+    "            y=group.Measurement,",
+    "            mode='lines+markers',",
+    "            name=label,",
+    "            legendgroup=signal,",
+    "            showlegend=show_legend,",
+    "            line=dict(color=style.get('color'), width=1.8),",
+    "            marker=dict(size=4),",
+    "            customdata=np.stack([group.Sample, group.Signal], axis=-1),",
+    "            hovertemplate='Time: %{x:.3g} h<br>Measurement: %{y:.3g}<br>Sample: %{customdata[0]}<br>Signal: %{customdata[1]}<extra></extra>',",
+    "        ))",
     "        labeled_signals.add(signal)",
-    "    ax.set_xlabel('Time (h)')",
-    "    ax.set_ylabel('Reporter signal')",
-    "    ax.set_title('Reporter timecourse (one line per sample)')",
-    "    if labeled_signals:",
-    "        ax.legend(title='Reporter')",
+    "    fig.update_layout(",
+    "        title='Reporter timecourse (one line per sample)',",
+    "        template='plotly_white',",
+    "        height=420,",
+    "        margin=dict(l=52, r=24, t=56, b=48),",
+    "        paper_bgcolor='white',",
+    "        plot_bgcolor='white',",
+    "        font=dict(family='Inter, system-ui, sans-serif', size=12, color='#24313d'),",
+    "        hovermode='closest',",
+    "        legend=dict(title='Reporter', orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),",
+    "        xaxis=dict(title='Time (h)', showgrid=True, gridcolor='#e5e7eb', zeroline=False, rangeslider=dict(visible=True)),",
+    "        yaxis=dict(title='Reporter signal', showgrid=True, gridcolor='#e5e7eb', zeroline=False),",
+    "    )",
+    "    fig.update_xaxes(showspikes=True, spikemode='across', spikesnap='cursor', spikedash='dot', spikecolor='#64748b')",
+    "    fig.update_yaxes(showspikes=True, spikemode='across', spikesnap='cursor', spikedash='dot', spikecolor='#64748b')",
+    "    display({'text/html': fig.to_html(include_plotlyjs='cdn', full_html=False, config={'responsive': True, 'displaylogo': False, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape'], 'toImageButtonOptions': {'format': 'png', 'filename': 'reporter-timecourse'}})})",
   );
 
   return `${lines.join("\n")}\n`;

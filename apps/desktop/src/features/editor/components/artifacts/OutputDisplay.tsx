@@ -2,7 +2,7 @@ import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { Fragment, type ReactNode, useState } from "react";
 
-import { Button, ChevronDown, ChevronRight, GripVertical, Save } from "@/ui";
+import { Button, ChevronDown, ChevronRight, Save } from "@/ui";
 
 import {
   DATAFRAME_MIME,
@@ -27,17 +27,16 @@ export function OutputDisplay({ display }: { display: DisplayData }) {
       return <DataFrame frame={payload as DataFrameData} />;
     case "text/html":
       return (
-        <ArtifactCard>
+        <ResizableArtifactCard className="bg-white p-0">
           <iframe
-            className="w-full rounded-[5px] border-0 bg-white"
+            className="h-full w-full border-0 bg-white"
             // Scripts run (Plotly etc.) but the frame stays cross-origin to the
             // app, so it can't reach into the host document.
             sandbox="allow-scripts"
             srcDoc={String(payload)}
-            style={{ height: 360 }}
             title="HTML output"
           />
-        </ArtifactCard>
+        </ResizableArtifactCard>
       );
     case "image/svg+xml":
       return (
@@ -351,16 +350,19 @@ function ArtifactCard({
   );
 }
 
-function ResizableArtifactCard({ children }: { children: ReactNode }) {
+function ResizableArtifactCard({
+  children,
+  className = "bg-white p-2",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div
-      className="group relative my-1.5 min-h-[180px] max-h-[80vh] min-w-[220px] max-w-full resize overflow-auto rounded-[6px] border border-cg-border bg-white p-2 font-sans shadow-sm"
+      className={`group relative my-1.5 min-h-[180px] max-h-[80vh] min-w-[220px] max-w-full resize overflow-auto rounded-[6px] border border-cg-border font-sans shadow-sm ${className}`}
       style={{ height: 360, width: "min(100%, 640px)" }}
     >
       {children}
-      <div className="pointer-events-none absolute bottom-1 right-1 rounded-[4px] border border-cg-border bg-cg-editor/90 p-0.5 text-cg-muted opacity-70 transition-opacity group-hover:opacity-100">
-        <GripVertical aria-hidden="true" size={13} className="rotate-45" />
-      </div>
     </div>
   );
 }
