@@ -4,22 +4,20 @@ import type { SbolPartRef } from "@/features/circuit/core/loica-model";
 import { loadObjects } from "@/features/data/core/data-service";
 import type { SbolObject } from "@/features/data/core/data-types";
 import { shortIri } from "@/features/data/core/format";
-import { ArrowDown, ArrowUp, Database, Plus, RefreshCw, Trash2 } from "@/ui";
+import { ArrowDown, ArrowUp, Plus, RefreshCw, Trash2 } from "@/ui";
 import { cx } from "@/ui/class-name";
 
 const SBOL_COMPONENT_CLASS = "https://sbols.org/v3#Component";
 const PAGE_SIZE = 200;
 
-const ROLE_ORDER = [
-  "promoter",
-  "rbs",
-  "cds",
-  "stability",
-  "terminator",
-  "engineered region",
-] as const;
-
-type RoleHint = (typeof ROLE_ORDER)[number] | "other";
+type RoleHint =
+  | "promoter"
+  | "rbs"
+  | "cds"
+  | "stability"
+  | "terminator"
+  | "engineered region"
+  | "other";
 
 type NodeSbolPartsProps = {
   onChange: (parts: SbolPartRef[]) => void;
@@ -89,14 +87,11 @@ export function NodeSbolParts({ onChange, parts }: NodeSbolPartsProps) {
   };
 
   return (
-    <section className="grid gap-2 rounded-[6px] border border-cg-border bg-cg-surface px-2.5 py-2 text-[11px]">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5 text-cg-fg">
-          <Database aria-hidden="true" size={13} />
-          <span className="font-semibold">SBOL assembly</span>
-        </div>
+    <div className="grid gap-1">
+      <div className="flex items-center justify-between text-[11px] text-cg-muted">
+        <span>SBOL assembly</span>
         <button
-          className="grid size-6 place-items-center rounded-[5px] text-cg-muted hover:bg-cg-surface-hover hover:text-cg-fg disabled:opacity-40"
+          className="grid size-6 cursor-pointer place-items-center rounded-[6px] border border-cg-border bg-transparent text-cg-muted transition-colors hover:bg-cg-surface-hover hover:text-cg-fg disabled:cursor-default disabled:opacity-40"
           disabled={loading}
           onClick={() => setRevision((value) => value + 1)}
           title="Reload SBOL objects"
@@ -110,121 +105,112 @@ export function NodeSbolParts({ onChange, parts }: NodeSbolPartsProps) {
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-1">
-        {ROLE_ORDER.map((role) => (
-          <span
-            className="rounded-[4px] border border-cg-border px-1.5 py-0.5 font-mono text-[9.5px] text-cg-muted"
-            key={role}
-          >
-            {role}
-          </span>
-        ))}
-      </div>
-
-      {parts.length > 0 ? (
-        <ol className="grid gap-1">
-          {parts.map((part, index) => (
-            <li
-              className="grid grid-cols-[18px_1fr_auto] items-center gap-1.5 rounded-[5px] border border-cg-border bg-cg-editor px-1.5 py-1"
-              key={`${part.iri}:${index}`}
-            >
-              <span className="text-center font-mono text-[10px] text-cg-muted">
-                {index + 1}
-              </span>
-              <div className="min-w-0">
-                <div className="truncate text-[11px] font-medium text-cg-fg">
-                  {part.displayId ?? part.name ?? shortIri(part.iri)}
+      <section className="grid gap-2 rounded-[6px] border border-cg-border bg-cg-surface px-2.5 py-2 text-[11px]">
+        {parts.length > 0 ? (
+          <ol className="grid gap-1">
+            {parts.map((part, index) => (
+              <li
+                className="grid grid-cols-[18px_1fr_auto] items-center gap-1.5 rounded-[5px] border border-cg-border bg-cg-editor px-1.5 py-1"
+                key={`${part.iri}:${index}`}
+              >
+                <span className="text-center font-mono text-[10px] text-cg-muted">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate text-[11px] font-medium text-cg-fg">
+                    {part.displayId ?? part.name ?? shortIri(part.iri)}
+                  </div>
+                  <div className="flex min-w-0 gap-1.5">
+                    <span className="shrink-0 font-mono text-[9.5px] text-cg-muted">
+                      {part.roleHint ?? "other"}
+                    </span>
+                    <span
+                      className="truncate font-mono text-[9.5px] text-cg-muted/70"
+                      title={part.iri}
+                    >
+                      {shortIri(part.iri)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex min-w-0 gap-1.5">
-                  <span className="shrink-0 font-mono text-[9.5px] text-cg-muted">
-                    {part.roleHint ?? "other"}
-                  </span>
-                  <span
-                    className="truncate font-mono text-[9.5px] text-cg-muted/70"
-                    title={part.iri}
+                <div className="flex items-center gap-0.5">
+                  <IconControl
+                    disabled={index === 0}
+                    label="Move SBOL object up"
+                    onClick={() => onChange(movePart(parts, index, index - 1))}
                   >
-                    {shortIri(part.iri)}
-                  </span>
+                    <ArrowUp aria-hidden="true" size={11} />
+                  </IconControl>
+                  <IconControl
+                    disabled={index === parts.length - 1}
+                    label="Move SBOL object down"
+                    onClick={() => onChange(movePart(parts, index, index + 1))}
+                  >
+                    <ArrowDown aria-hidden="true" size={11} />
+                  </IconControl>
+                  <IconControl
+                    label="Remove SBOL object"
+                    onClick={() =>
+                      onChange(parts.filter((_, current) => current !== index))
+                    }
+                  >
+                    <Trash2 aria-hidden="true" size={11} />
+                  </IconControl>
                 </div>
-              </div>
-              <div className="flex items-center gap-0.5">
-                <IconControl
-                  disabled={index === 0}
-                  label="Move SBOL object up"
-                  onClick={() => onChange(movePart(parts, index, index - 1))}
-                >
-                  <ArrowUp aria-hidden="true" size={11} />
-                </IconControl>
-                <IconControl
-                  disabled={index === parts.length - 1}
-                  label="Move SBOL object down"
-                  onClick={() => onChange(movePart(parts, index, index + 1))}
-                >
-                  <ArrowDown aria-hidden="true" size={11} />
-                </IconControl>
-                <IconControl
-                  label="Remove SBOL object"
-                  onClick={() =>
-                    onChange(parts.filter((_, current) => current !== index))
-                  }
-                >
-                  <Trash2 aria-hidden="true" size={11} />
-                </IconControl>
-              </div>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="text-[10.5px] text-cg-muted">
-          No SBOL objects connected.
-        </p>
-      )}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-[10.5px] text-cg-muted">
+            No SBOL objects connected.
+          </p>
+        )}
 
-      <div className="grid gap-1">
-        <input
-          className="rounded-[6px] border border-cg-border bg-cg-editor px-2 py-1 text-[11.5px] text-cg-fg outline-none focus:border-cg-accent"
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Filter SBOL objects"
-          spellCheck={false}
-          value={query}
-        />
-        <div className="flex gap-1">
-          <select
-            className="min-w-0 flex-1 rounded-[6px] border border-cg-border bg-cg-editor px-2 py-1 text-[11.5px] text-cg-fg outline-none focus:border-cg-accent"
-            disabled={availableObjects.length === 0}
-            onChange={(event) => setSelectedIri(event.target.value)}
-            value={selectedObject?.iri ?? ""}
-          >
-            {availableObjects.length === 0 ? (
-              <option value="">
-                {loading ? "Loading SBOL objects..." : "No matching objects"}
-              </option>
-            ) : (
-              availableObjects.map((object) => (
-                <option key={object.iri} value={object.iri}>
-                  {objectLabel(object)}
+        <div className="grid gap-1">
+          <input
+            className="rounded-[6px] border border-cg-border bg-cg-editor px-2 py-1 text-[11.5px] text-cg-fg outline-none focus:border-cg-accent"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter SBOL objects"
+            spellCheck={false}
+            value={query}
+          />
+          <div className="flex gap-1">
+            <select
+              className="min-w-0 flex-1 rounded-[6px] border border-cg-border bg-cg-editor px-2 py-1 text-[11.5px] text-cg-fg outline-none focus:border-cg-accent"
+              disabled={availableObjects.length === 0}
+              onChange={(event) => setSelectedIri(event.target.value)}
+              value={selectedObject?.iri ?? ""}
+            >
+              {availableObjects.length === 0 ? (
+                <option value="">
+                  {loading ? "Loading SBOL objects..." : "No matching objects"}
                 </option>
-              ))
-            )}
-          </select>
-          <button
-            className="flex h-[28px] items-center gap-1 rounded-[6px] border border-cg-border px-2 text-[11px] text-cg-fg hover:bg-cg-surface-hover disabled:opacity-40"
-            disabled={!selectedObject}
-            onClick={addSelected}
-            type="button"
-          >
-            <Plus aria-hidden="true" size={12} />
-            Add
-          </button>
+              ) : (
+                availableObjects.map((object) => (
+                  <option key={object.iri} value={object.iri}>
+                    {objectLabel(object)}
+                  </option>
+                ))
+              )}
+            </select>
+            <button
+              className="flex items-center gap-1 rounded-[6px] border border-cg-border bg-transparent px-2 text-[11.5px] font-medium text-cg-muted transition-colors hover:border-cg-accent/50 hover:bg-cg-accent/10 hover:text-cg-accent disabled:opacity-40"
+              disabled={!selectedObject}
+              onClick={addSelected}
+              type="button"
+            >
+              <Plus aria-hidden="true" size={12} strokeWidth={1.8} />
+              Add
+            </button>
+          </div>
         </div>
-      </div>
 
-      {error ? (
-        <div className="rounded-[5px] border border-cg-danger/30 bg-cg-danger/10 px-2 py-1 text-[10.5px] text-cg-danger">
-          {error}
-        </div>
-      ) : null}
-    </section>
+        {error ? (
+          <div className="rounded-[5px] border border-cg-danger/30 bg-cg-danger/10 px-2 py-1 text-[10.5px] text-cg-danger">
+            {error}
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }
 
