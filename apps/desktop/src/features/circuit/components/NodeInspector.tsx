@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { LoicaCodeEditor } from "@/features/circuit/components/LoicaCodeEditor";
 import { NodeEquation } from "@/features/circuit/components/NodeEquation";
+import { NodeSbolParts } from "@/features/circuit/components/NodeSbolParts";
 import {
   assignVarNames,
   constructorCall,
@@ -14,6 +15,7 @@ import {
   getNodeSpec,
   type ParamSpec,
   type ParamValue,
+  type SbolPartRef,
 } from "@/features/circuit/core/loica-model";
 import type { TextEditorSettings } from "@/features/settings";
 import { type ResolvedTheme, Trash2 } from "@/ui";
@@ -30,6 +32,7 @@ type NodeInspectorProps = {
     name?: string;
     params: Record<string, ParamValue>;
   }) => void;
+  onSbolPartsChange: (parts: SbolPartRef[]) => void;
   resolvedTheme: ResolvedTheme;
   textEditorSettings: TextEditorSettings;
 };
@@ -42,6 +45,7 @@ export function NodeInspector({
   onParamChange,
   onRename,
   onReplaceFromCode,
+  onSbolPartsChange,
   resolvedTheme,
   textEditorSettings,
 }: NodeInspectorProps) {
@@ -147,6 +151,10 @@ export function NodeInspector({
           {spec.params.length === 0 ? (
             <p className="text-[11px] text-cg-muted">No parameters.</p>
           ) : null}
+          <NodeSbolParts
+            onChange={onSbolPartsChange}
+            parts={node.sbolParts ?? []}
+          />
         </div>
       ) : (
         <div className="flex min-h-[160px] flex-col gap-1.5">

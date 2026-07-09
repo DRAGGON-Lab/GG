@@ -7,6 +7,7 @@ import {
   NODE_SPECS,
   type NodeKind,
   type ParamValue,
+  type SbolPartRef,
   type SimulationConfig,
 } from "@/features/circuit/core/loica-model";
 
@@ -16,6 +17,7 @@ export type CircuitNodeData = {
   kind: NodeKind;
   name: string;
   params: Record<string, ParamValue>;
+  sbolParts?: SbolPartRef[];
   inputCount?: number;
   [key: string]: unknown;
 };
@@ -36,6 +38,7 @@ export function toFlowNode(node: CircuitNode): AppNode {
       kind: node.kind,
       name: node.name,
       params: node.params,
+      sbolParts: node.sbolParts,
     },
     id: node.id,
     position: node.position,
@@ -65,6 +68,9 @@ export function nodeFromFlow(node: AppNode): CircuitNode {
     params: node.data.params,
     position: { x: node.position.x, y: node.position.y },
   };
+  if (node.data.sbolParts !== undefined && node.data.sbolParts.length > 0) {
+    domain.sbolParts = node.data.sbolParts;
+  }
   if (node.data.inputCount !== undefined) {
     domain.inputCount = node.data.inputCount;
   }

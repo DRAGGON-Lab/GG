@@ -10,6 +10,7 @@ import {
   NODE_SPECS,
   type NodeKind,
   type ParamValue,
+  type SbolPartRef,
   type SimulationConfig,
 } from "@/features/circuit/core/loica-model";
 
@@ -73,6 +74,10 @@ function parseNodes(value: unknown): CircuitNode[] {
         y: typeof position?.y === "number" ? position.y : 0,
       },
     };
+    const sbolParts = parseSbolParts(record.sbolParts);
+    if (sbolParts.length > 0) {
+      node.sbolParts = sbolParts;
+    }
     if (typeof record.inputCount === "number") {
       node.inputCount = Math.max(1, Math.round(record.inputCount));
     }
@@ -97,6 +102,38 @@ function parseParams(value: unknown): Record<string, ParamValue> {
     }
   }
   return params;
+}
+
+function parseSbolParts(value: unknown): SbolPartRef[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const parts: SbolPartRef[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.iri !== "string" || record.iri.trim() === "") {
+      continue;
+    }
+    const roles = Array.isArray(record.roles)
+      ? record.roles.filter((role): role is string => typeof role === "string")
+      : [];
+    parts.push({
+      displayId:
+        typeof record.displayId === "string" ? record.displayId : undefined,
+      graphId: typeof record.graphId === "string" ? record.graphId : undefined,
+      iri: record.iri,
+      name: typeof record.name === "string" ? record.name : undefined,
+      roleHint:
+        typeof record.roleHint === "string" ? record.roleHint : undefined,
+      roles,
+      sbolClass:
+        typeof record.sbolClass === "string" ? record.sbolClass : "SBOL",
+    });
+  }
+  return parts;
 }
 
 function isNumberArray(value: unknown): value is number[] {

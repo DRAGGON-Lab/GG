@@ -341,9 +341,21 @@ export type CircuitNode = {
   /// Display name and the basis for the generated Python variable.
   name: string;
   params: Record<string, ParamValue>;
+  /// Ordered SBOL database objects connected to this node, e.g. promoter then RBS.
+  sbolParts?: SbolPartRef[];
   /// Number of input handles for a dynamic-input operator (`Sum`).
   inputCount?: number;
   position: { x: number; y: number };
+};
+
+export type SbolPartRef = {
+  iri: string;
+  sbolClass: string;
+  displayId?: string | null;
+  graphId?: string | null;
+  name?: string | null;
+  roleHint?: string;
+  roles: string[];
 };
 
 export type CircuitEdge = {
