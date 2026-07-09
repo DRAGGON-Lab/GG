@@ -96,6 +96,9 @@ export function constructorCall(
   }
 
   for (const paramSpec of spec.params) {
+    if (paramSpec.uiOnly) {
+      continue;
+    }
     const value = node.params[paramSpec.key];
     if (value === undefined) {
       continue;
@@ -281,7 +284,9 @@ export function parseParamsFromCode(
   const argList = code.slice(open + 1, close);
   const args = splitTopLevel(argList);
   const spec = getNodeSpec(kind);
-  const paramKinds = new Map(spec.params.map((p) => [p.key, p.kind]));
+  const paramKinds = new Map(
+    spec.params.filter((param) => !param.uiOnly).map((p) => [p.key, p.kind]),
+  );
 
   for (const arg of args) {
     const eq = arg.indexOf("=");

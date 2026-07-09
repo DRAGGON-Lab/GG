@@ -116,7 +116,7 @@ function GlyphNode({
         title={spec.description}
       >
         <SbolGlyph
-          color={spec.accent}
+          color={glyphColor(data.kind, data.params, spec.accent)}
           glyph={glyphForKind(data.kind)}
           size={GLYPH_SIZE}
         />
@@ -149,7 +149,7 @@ export function SpeciesNode({ data, id, selected }: NodeProps<AppNode>) {
       data={data}
       id={id}
       selected={selected ?? false}
-      showParams={false}
+      showParams={data.kind === "regulator" || data.kind === "reporter"}
     />
   );
 }
@@ -170,7 +170,13 @@ function paramSummaryText(
       if (value === undefined || value === "") {
         return null;
       }
-      return `${paramSpec.key}=${formatParam(value)}`;
+      if (paramSpec.key === "signal_id") {
+        return null;
+      }
+      if (paramSpec.key === "init_concentration" && value === 0) {
+        return null;
+      }
+      return `${summaryParamLabel(paramSpec.key)}=${formatParam(value)}`;
     })
     .filter((part): part is string => part !== null)
     .join(" ");
@@ -181,4 +187,43 @@ function formatParam(value: unknown): string {
     return `[${value.map((entry) => formatParam(entry)).join(",")}]`;
   }
   return String(value);
+}
+
+function glyphColor(
+  kind: NodeKind,
+  params: Record<string, unknown>,
+  fallback: string,
+): string {
+  if (kind !== "reporter") {
+    return fallback;
+  }
+  const color = params.color;
+  if (typeof color !== "string" || !/^#[0-9a-f]{6}$/iu.test(color)) {
+    return fallback;
+  }
+  return fluorescentColor(color);
+}
+
+function fluorescentColor(color: string): string {
+  const red = Number.parseInt(color.slice(1, 3), 16);
+  const green = Number.parseInt(color.slice(3, 5), 16);
+  const blue = Number.parseInt(color.slice(5, 7), 16);
+  const max = Math.max(red, green, blue);
+  const boost = max > 0 ? 255 / max : 1;
+  const channel = (value: number) =>
+    Math.round(Math.min(255, value * boost * 1.12))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${channel(red)}${channel(green)}${channel(blue)}`;
+}
+
+function summaryParamLabel(key: string): string {
+  switch (key) {
+    case "degradation_rate":
+      return "deg";
+    case "init_concentration":
+      return "init";
+    default:
+      return key;
+  }
 }
