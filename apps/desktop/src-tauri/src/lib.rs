@@ -2,6 +2,7 @@ mod agent;
 mod ai;
 mod backup;
 mod data;
+mod flapjack;
 mod inspector;
 mod mcp;
 mod python;
@@ -45,6 +46,13 @@ pub fn run() {
                 tauri::async_runtime::block_on(data::state::DataStore::open(&sbol_db_path))
                     .map_err(std::io::Error::other)?;
             app.manage(data_store);
+
+            let flapjack_db_path = app_data_dir.join("flapjack.sqlite3");
+            let flapjack_store = tauri::async_runtime::block_on(
+                flapjack::state::FlapjackStore::open(&flapjack_db_path),
+            )
+            .map_err(std::io::Error::other)?;
+            app.manage(flapjack_store);
 
             let resource_dir = app.path().resource_dir().ok();
             app.manage(python::PythonState::new(resource_dir));
@@ -115,6 +123,21 @@ pub fn run() {
             data::commands::data_schema_sql,
             data::commands::data_import,
             data::commands::data_import_many,
+            flapjack::commands::flapjack_overview,
+            flapjack::commands::flapjack_studies_list,
+            flapjack::commands::flapjack_study_get,
+            flapjack::commands::flapjack_assays_list,
+            flapjack::commands::flapjack_samples_list,
+            flapjack::commands::flapjack_signals_list,
+            flapjack::commands::flapjack_measurements_query,
+            flapjack::commands::flapjack_characterizations_list,
+            flapjack::commands::flapjack_characterization_get,
+            flapjack::commands::flapjack_sql_execute,
+            flapjack::commands::flapjack_sql_validate,
+            flapjack::commands::flapjack_schema_sql,
+            flapjack::commands::flapjack_db_path,
+            flapjack::commands::flapjack_import_study,
+            flapjack::commands::flapjack_save_characterization,
             agent::commands::agent_respond_permission,
             agent::commands::agent_respond_workspace_request,
             agent::commands::agent_send,

@@ -66,6 +66,13 @@ export type CircuitPageContextValue = {
   runSimulation: () => void;
   running: boolean;
 
+  // Persisting results to the local Flapjack store
+  canSaveResults: boolean;
+  saveResults: () => void;
+  saveState: "idle" | "saving" | "saved" | "error";
+  savedStudyId: number | null;
+  saveError: string | null;
+
   // Output
   runLines: RunLine[];
   exitCode: number | null;

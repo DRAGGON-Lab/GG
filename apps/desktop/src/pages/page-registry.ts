@@ -3,6 +3,7 @@ import { circuitPage } from "@/features/circuit/page";
 import { dataPage } from "@/features/data/page";
 import { databasePage } from "@/features/database/page";
 import { editorPage } from "@/features/editor/page";
+import { flapjackPage } from "@/features/flapjack/page";
 import { pythonPage } from "@/features/python/page";
 import { settingsPage } from "@/features/settings/page";
 import type {
@@ -24,6 +25,7 @@ export const pageRegistry = [
   circuitPage,
   pythonPage,
   dataPage,
+  flapjackPage,
   databasePage,
   settingsPage,
 ] as const satisfies readonly PageDefinition[];
@@ -38,4 +40,5 @@ export const pageByActivity = {
   Circuit: "circuit",
   Python: "python",
   Data: "data",
+  Flapjack: "flapjack",
 } as const satisfies Record<TopLevelActivityMode, PageId>;

@@ -9,6 +9,7 @@ export type ActivityMode =
   | "Circuit"
   | "Python"
   | "Data"
+  | "Flapjack"
   | "Database"
   | "Settings";
 
@@ -25,6 +26,7 @@ export type PageId =
   | "circuit"
   | "python"
   | "data"
+  | "flapjack"
   | "database"
   | "settings";
 

@@ -8,6 +8,7 @@ import {
   Code2,
   Database,
   Dna,
+  FlaskConical,
   type LucideIcon,
   MessageSquare,
   Settings,
@@ -20,6 +21,7 @@ export const activityIconByMode = {
   Python: SquareTerminal,
   Circuit: Waypoints,
   Data: Dna,
+  Flapjack: FlaskConical,
   Database,
   Editor: Code2,
   Settings,
@@ -50,6 +52,11 @@ export const activityItemByMode = {
     Icon: activityIconByMode.Data,
     label: "Data",
     pageId: "data",
+  },
+  Flapjack: {
+    Icon: activityIconByMode.Flapjack,
+    label: "Flapjack",
+    pageId: "flapjack",
   },
 } as const satisfies Record<ActivityRailItemId, ActivityItem>;
 

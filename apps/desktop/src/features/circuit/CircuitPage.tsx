@@ -72,6 +72,10 @@ import {
   resizedSumParams,
   type SimulationConfig,
 } from "@/features/circuit/core/loica-model";
+import { parseDisplay } from "@/features/editor/components/artifacts/display";
+import { importStudy } from "@/features/flapjack/core/flapjack-service";
+import type { ExperimentManifest } from "@/features/flapjack/core/flapjack-types";
+import { FLAPJACK_MANIFEST_MIME } from "@/features/flapjack/core/flapjack-types";
 import { useAppSettings } from "@/features/settings";
 import { useTheme } from "@/ui";
 import { dockviewThemeByMode } from "@/workbench/theme";
@@ -149,6 +153,15 @@ function CircuitWorkspace() {
   );
   const [envError, setEnvError] = useState<string | null>(null);
   const [envLog, setEnvLog] = useState<string[]>([]);
+
+  // The most recent run's experiment manifest, captured from the diverted
+  // display artifact; the "Save to Flapjack" action persists it to the store.
+  const [manifest, setManifest] = useState<ExperimentManifest | null>(null);
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [savedStudyId, setSavedStudyId] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const addCounterRef = useRef(0);
   const envRootRef = useRef<string | null>(null);
@@ -482,12 +495,31 @@ function CircuitWorkspace() {
     panel?.group.api.setSize({ height: 260 });
   }, []);
 
+  // A run's display stream carries the Flapjack manifest under a custom MIME.
+  // Divert it into state (so "Save to Flapjack" can persist it) and keep it out
+  // of the visible output; everything else appends to the output lines.
+  const handleRunLine = useCallback((line: RunLine) => {
+    if (line.stream === "display") {
+      const bundle = parseDisplay(line.text);
+      const payload = bundle?.data?.[FLAPJACK_MANIFEST_MIME];
+      if (payload) {
+        setManifest(payload as ExperimentManifest);
+        return;
+      }
+    }
+    setRunLines((current) => [...current, line]);
+  }, []);
+
   const handleRun = useCallback(async () => {
     if (running) {
       return;
     }
     setRunLines([]);
     setExitCode(null);
+    setManifest(null);
+    setSaveState("idle");
+    setSavedStudyId(null);
+    setSaveError(null);
     setRunning(true);
     openOutputPanel();
     const root = await ensureEnv();
@@ -500,8 +532,10 @@ function CircuitWorkspace() {
       return;
     }
     try {
-      const result = await runCircuitScript(generatedScript, root, (line) =>
-        setRunLines((current) => [...current, line]),
+      const result = await runCircuitScript(
+        generatedScript,
+        root,
+        handleRunLine,
       );
       setExitCode(result.exitCode);
     } catch (error) {
@@ -515,7 +549,26 @@ function CircuitWorkspace() {
     } finally {
       setRunning(false);
     }
-  }, [ensureEnv, generatedScript, openOutputPanel, running]);
+  }, [ensureEnv, generatedScript, handleRunLine, openOutputPanel, running]);
+
+  // Persist the last run's results into the local Flapjack store.
+  const saveResults = useCallback(async () => {
+    if (!manifest || saveState === "saving") {
+      return;
+    }
+    setSaveState("saving");
+    setSaveError(null);
+    try {
+      const report = await importStudy(manifest);
+      setSavedStudyId(report.studyId);
+      setSaveState("saved");
+    } catch (error) {
+      setSaveError(
+        error instanceof Error ? error.message : "Could not save to Flapjack.",
+      );
+      setSaveState("error");
+    }
+  }, [manifest, saveState]);
 
   const updateSimulation = useCallback((patch: Partial<SimulationConfig>) => {
     setSimulation((current) => ({ ...current, ...patch }));
@@ -638,6 +691,11 @@ function CircuitWorkspace() {
       runLines,
       runSimulation: () => void handleRun(),
       running,
+      saveError,
+      saveResults: () => void saveResults(),
+      saveState,
+      savedStudyId,
+      canSaveResults: manifest !== null,
       selectedNode: selectedDomainNode,
       simulation,
       textEditorSettings: settings.textEditor,
@@ -664,6 +722,7 @@ function CircuitWorkspace() {
       handleRun,
       handleSave,
       isValidConnection,
+      manifest,
       nodes,
       onConnect,
       onEdgesChange,
@@ -673,6 +732,10 @@ function CircuitWorkspace() {
       resolvedTheme,
       runLines,
       running,
+      saveError,
+      saveResults,
+      saveState,
+      savedStudyId,
       selectedDomainNode,
       selectedNodeId,
       settings.textEditor,
@@ -780,6 +843,7 @@ function SimulateTabPanel() {
   return (
     <div className="min-h-0 overflow-auto">
       <SimulationPanel
+        canSaveResults={page.canSaveResults}
         config={page.simulation}
         envError={page.envError}
         envLog={page.envLog}
@@ -787,7 +851,11 @@ function SimulateTabPanel() {
         onChange={page.updateSimulation}
         onRetry={page.retryEnv}
         onRun={page.runSimulation}
+        onSaveResults={page.saveResults}
         running={page.running}
+        saveError={page.saveError}
+        savedStudyId={page.savedStudyId}
+        saveState={page.saveState}
       />
     </div>
   );

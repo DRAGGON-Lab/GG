@@ -1,5 +1,5 @@
 import type { SimulationConfig } from "@/features/circuit/core/loica-model";
-import { Button, LoaderCircle, Play } from "@/ui";
+import { Button, LoaderCircle, Play, Save } from "@/ui";
 
 /// The managed-environment lifecycle as the panel sees it. `unavailable` is the
 /// non-desktop case; the rest mirror `ensureCircuitEnv`'s phases plus `error`.
@@ -13,6 +13,7 @@ export type EnvState =
   | "error";
 
 export function SimulationPanel({
+  canSaveResults,
   config,
   envError,
   envLog,
@@ -20,8 +21,13 @@ export function SimulationPanel({
   onChange,
   onRetry,
   onRun,
+  onSaveResults,
   running,
+  saveError,
+  savedStudyId,
+  saveState,
 }: {
+  canSaveResults: boolean;
   config: SimulationConfig;
   envError: string | null;
   envLog: string[];
@@ -29,7 +35,11 @@ export function SimulationPanel({
   onChange: (patch: Partial<SimulationConfig>) => void;
   onRetry: () => void;
   onRun: () => void;
+  onSaveResults: () => void;
   running: boolean;
+  saveError: string | null;
+  savedStudyId: number | null;
+  saveState: "idle" | "saving" | "saved" | "error";
 }) {
   const canRun = envState === "ready" && !running;
   return (
@@ -132,6 +142,37 @@ export function SimulationPanel({
         )}
         {running ? "Running…" : "Run simulation"}
       </Button>
+
+      {canSaveResults ? (
+        <div className="flex flex-col gap-1">
+          <Button
+            className="justify-center"
+            disabled={saveState === "saving"}
+            onClick={onSaveResults}
+            size="sm"
+            variant="ghost"
+          >
+            {saveState === "saving" ? (
+              <LoaderCircle
+                aria-hidden="true"
+                className="animate-spin"
+                size={14}
+              />
+            ) : (
+              <Save aria-hidden="true" size={14} />
+            )}
+            {saveState === "saving" ? "Saving…" : "Save results to Flapjack"}
+          </Button>
+          {saveState === "saved" && savedStudyId !== null ? (
+            <span className="text-[10.5px] text-cg-muted">
+              Saved as study #{savedStudyId}. Open the Flapjack tab to explore.
+            </span>
+          ) : null}
+          {saveState === "error" && saveError ? (
+            <span className="text-[10.5px] text-cg-danger">{saveError}</span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
