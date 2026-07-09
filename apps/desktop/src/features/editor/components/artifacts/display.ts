@@ -13,6 +13,10 @@ export type DataFrameData = {
   columns: string[];
   index: string[];
   data: (string | number | boolean | null)[][];
+  /// Pandas-generated CSV (DataFrame.to_csv()) used when saving captures.
+  csv?: string;
+  /// Pandas-generated fixed-width text (DataFrame.to_string()) for .txt saves.
+  text?: string;
 };
 
 export const DATAFRAME_MIME = "application/vnd.bioeng.dataframe+json";

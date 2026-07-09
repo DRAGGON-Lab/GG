@@ -1,4 +1,8 @@
-import { Fragment, type ReactNode } from "react";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { Fragment, type ReactNode, useState } from "react";
+
+import { Button, ChevronDown, ChevronRight, GripVertical, Save } from "@/ui";
 
 import {
   DATAFRAME_MIME,
@@ -37,25 +41,27 @@ export function OutputDisplay({ display }: { display: DisplayData }) {
       );
     case "image/svg+xml":
       return (
-        <ArtifactCard>
+        <ResizableArtifactCard>
           <div
             // SVG comes from the user's own run (same trust as the code we just
             // ran); render inline so diagrams scale.
-            className="overflow-auto bg-white p-2 [&_svg]:h-auto [&_svg]:max-w-full"
+            className="h-full overflow-auto bg-white p-2 [&_svg]:h-auto [&_svg]:max-w-full"
             dangerouslySetInnerHTML={{ __html: String(payload) }}
           />
-        </ArtifactCard>
+        </ResizableArtifactCard>
       );
     case "image/png":
     case "image/jpeg": {
       const raw = String(payload);
       const src = raw.startsWith("data:") ? raw : `data:${mime};base64,${raw}`;
       return (
-        <img
-          alt="Figure"
-          className="my-1.5 block max-w-full rounded-[6px] border border-cg-border bg-white"
-          src={src}
-        />
+        <ResizableArtifactCard>
+          <img
+            alt="Figure"
+            className="block h-full w-full object-contain"
+            src={src}
+          />
+        </ResizableArtifactCard>
       );
     }
     case "application/json":
@@ -79,62 +85,175 @@ export function OutputDisplay({ display }: { display: DisplayData }) {
 }
 
 function DataFrame({ frame }: { frame: DataFrameData }) {
-  return isPlateShaped(frame) ? (
-    <PlateMap frame={frame} />
-  ) : (
-    <TableView frame={frame} />
+  const [expanded, setExpanded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function saveFrame(format: "csv" | "txt") {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const path = await saveDialog({
+        defaultPath: `dataframe.${format}`,
+        filters: [
+          format === "csv"
+            ? { name: "CSV", extensions: ["csv"] }
+            : { name: "Text", extensions: ["txt"] },
+        ],
+      });
+      if (!path) {
+        return;
+      }
+      await writeTextFile(
+        path,
+        format === "csv" ? toCsv(frame) : toText(frame),
+      );
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ArtifactCard className="overflow-hidden p-0">
+      <div className="flex min-w-0 items-center gap-2 border-b border-cg-border bg-cg-surface px-2.5 py-1.5">
+        <Button
+          aria-expanded={expanded}
+          className="min-w-0 flex-1 justify-start gap-1.5 rounded-[5px] px-1.5 py-1 text-[11.5px] font-semibold text-cg-fg hover:bg-cg-surface-hover"
+          onClick={() => setExpanded((value) => !value)}
+          size="none"
+          variant="bare"
+        >
+          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          Dataframe
+        </Button>
+        <Button
+          className="h-[24px] rounded-[5px] px-2 text-[11px] text-cg-muted hover:bg-cg-surface-hover hover:text-cg-fg"
+          disabled={saving}
+          onClick={() => void saveFrame("csv")}
+          size="none"
+          title="Save dataframe as CSV using pandas output"
+          variant="bare"
+        >
+          <Save size={12} />
+          CSV
+        </Button>
+        <Button
+          className="h-[24px] rounded-[5px] px-2 text-[11px] text-cg-muted hover:bg-cg-surface-hover hover:text-cg-fg"
+          disabled={saving}
+          onClick={() => void saveFrame("txt")}
+          size="none"
+          title="Save dataframe as text using pandas output"
+          variant="bare"
+        >
+          <Save size={12} />
+          TXT
+        </Button>
+      </div>
+      {saveError ? (
+        <div className="border-b border-cg-border px-3 py-1.5 text-[11px] text-cg-danger">
+          {saveError}
+        </div>
+      ) : null}
+      {expanded ? (
+        <div className="p-2.5">
+          {isPlateShaped(frame) ? (
+            <PlateMap frame={frame} />
+          ) : (
+            <TableView frame={frame} />
+          )}
+        </div>
+      ) : null}
+    </ArtifactCard>
   );
+}
+
+function toCsv(frame: DataFrameData): string {
+  if (frame.csv !== undefined) {
+    return frame.csv;
+  }
+  const rows = [
+    ["", ...frame.columns],
+    ...frame.data.map((row, index) => [
+      frame.index[index] ?? String(index),
+      ...row,
+    ]),
+  ];
+  return rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const value = cell === null || cell === undefined ? "" : String(cell);
+          return /[",\n\r]/.test(value)
+            ? `"${value.split('"').join('""')}"`
+            : value;
+        })
+        .join(","),
+    )
+    .join("\n");
+}
+
+function toText(frame: DataFrameData): string {
+  if (frame.text !== undefined) {
+    return frame.text;
+  }
+  const rows = frame.data.map((row, rowIndex) => [
+    frame.index[rowIndex] ?? String(rowIndex),
+    ...row.map((cell) => cell ?? ""),
+  ]);
+  return [["", ...frame.columns], ...rows]
+    .map((row) => row.map((cell) => String(cell)).join("\t"))
+    .join("\n");
 }
 
 function PlateMap({ frame }: { frame: DataFrameData }) {
   const colorByValue = buildColorMap(frame);
 
   return (
-    <ArtifactCard>
-      <div className="overflow-auto">
-        <div
-          className="inline-grid gap-[3px]"
-          style={{
-            gridTemplateColumns: `auto repeat(${frame.columns.length}, minmax(16px, 1fr))`,
-          }}
-        >
-          <div />
-          {frame.columns.map((column) => (
-            <div
-              className="text-center text-[9px] font-semibold leading-none text-cg-muted"
-              key={`h${column}`}
-            >
-              {column}
+    <div className="overflow-auto">
+      <div
+        className="inline-grid gap-[3px]"
+        style={{
+          gridTemplateColumns: `auto repeat(${frame.columns.length}, minmax(16px, 1fr))`,
+        }}
+      >
+        <div />
+        {frame.columns.map((column) => (
+          <div
+            className="text-center text-[9px] font-semibold leading-none text-cg-muted"
+            key={`h${column}`}
+          >
+            {column}
+          </div>
+        ))}
+        {frame.index.map((rowLabel, rowIndex) => (
+          <Fragment key={rowLabel}>
+            <div className="flex items-center pr-1 text-[9px] font-semibold leading-none text-cg-muted">
+              {rowLabel}
             </div>
-          ))}
-          {frame.index.map((rowLabel, rowIndex) => (
-            <Fragment key={rowLabel}>
-              <div className="flex items-center pr-1 text-[9px] font-semibold leading-none text-cg-muted">
-                {rowLabel}
-              </div>
-              {frame.columns.map((column, colIndex) => {
-                const value = frame.data[rowIndex]?.[colIndex] ?? null;
-                const label =
-                  value === null || value === "" ? null : String(value);
-                const color = label ? colorByValue.get(label) : undefined;
-                return (
-                  <div
-                    className="grid aspect-square min-w-[16px] place-items-center rounded-full border border-cg-border"
-                    key={`${rowLabel}${column}`}
-                    style={color ? { backgroundColor: color } : undefined}
-                    title={
-                      label
-                        ? `${rowLabel}${column}: ${label}`
-                        : `${rowLabel}${column}`
-                    }
-                  />
-                );
-              })}
-            </Fragment>
-          ))}
-        </div>
+            {frame.columns.map((column, colIndex) => {
+              const value = frame.data[rowIndex]?.[colIndex] ?? null;
+              const label =
+                value === null || value === "" ? null : String(value);
+              const color = label ? colorByValue.get(label) : undefined;
+              return (
+                <div
+                  className="grid aspect-square min-w-[16px] place-items-center rounded-full border border-cg-border"
+                  key={`${rowLabel}${column}`}
+                  style={color ? { backgroundColor: color } : undefined}
+                  title={
+                    label
+                      ? `${rowLabel}${column}: ${label}`
+                      : `${rowLabel}${column}`
+                  }
+                />
+              );
+            })}
+          </Fragment>
+        ))}
       </div>
-    </ArtifactCard>
+    </div>
   );
 }
 
@@ -175,53 +294,73 @@ function TableView({ frame }: { frame: DataFrameData }) {
   );
 
   return (
-    <ArtifactCard>
-      <div className="overflow-auto">
-        <table className="w-full border-collapse text-[11.5px]">
-          <thead>
-            <tr>
+    <div className="overflow-auto">
+      <table className="w-full border-collapse text-[11.5px]">
+        <thead>
+          <tr>
+            {showIndex ? (
+              <th className="border-b border-cg-border px-2 py-1 text-left font-semibold text-cg-muted" />
+            ) : null}
+            {frame.columns.map((column) => (
+              <th
+                className="border-b border-cg-border px-2 py-1 text-left font-semibold text-cg-fg"
+                key={column}
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {frame.data.map((row, rowIndex) => (
+            <tr key={rowIndex}>
               {showIndex ? (
-                <th className="border-b border-cg-border px-2 py-1 text-left font-semibold text-cg-muted" />
+                <td className="border-b border-cg-border px-2 py-1 font-semibold text-cg-muted">
+                  {frame.index[rowIndex]}
+                </td>
               ) : null}
-              {frame.columns.map((column) => (
-                <th
-                  className="border-b border-cg-border px-2 py-1 text-left font-semibold text-cg-fg"
-                  key={column}
+              {row.map((cell, cellIndex) => (
+                <td
+                  className="border-b border-cg-border px-2 py-1 align-top text-cg-fg"
+                  key={cellIndex}
                 >
-                  {column}
-                </th>
+                  {cell === null ? "" : String(cell)}
+                </td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {frame.data.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {showIndex ? (
-                  <td className="border-b border-cg-border px-2 py-1 font-semibold text-cg-muted">
-                    {frame.index[rowIndex]}
-                  </td>
-                ) : null}
-                {row.map((cell, cellIndex) => (
-                  <td
-                    className="border-b border-cg-border px-2 py-1 align-top text-cg-fg"
-                    key={cellIndex}
-                  >
-                    {cell === null ? "" : String(cell)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </ArtifactCard>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
-function ArtifactCard({ children }: { children: ReactNode }) {
+function ArtifactCard({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="my-1.5 overflow-hidden rounded-[6px] border border-cg-border bg-cg-editor p-2 font-sans">
+    <div
+      className={`my-1.5 overflow-hidden rounded-[6px] border border-cg-border bg-cg-editor p-2 font-sans ${className}`}
+    >
       {children}
+    </div>
+  );
+}
+
+function ResizableArtifactCard({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="group relative my-1.5 min-h-[180px] max-h-[80vh] min-w-[220px] max-w-full resize overflow-auto rounded-[6px] border border-cg-border bg-white p-2 font-sans shadow-sm"
+      style={{ height: 360, width: "min(100%, 640px)" }}
+    >
+      {children}
+      <div className="pointer-events-none absolute bottom-1 right-1 rounded-[4px] border border-cg-border bg-cg-editor/90 p-0.5 text-cg-muted opacity-70 transition-opacity group-hover:opacity-100">
+        <GripVertical aria-hidden="true" size={13} className="rotate-45" />
+      </div>
     </div>
   );
 }

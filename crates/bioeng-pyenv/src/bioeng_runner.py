@@ -68,6 +68,10 @@ def _dataframe_bundle(frame):
         "columns": [str(column) for column in split.get("columns", [])],
         "index": [str(label) for label in split.get("index", [])],
         "data": [[_cell(value) for value in row] for row in split.get("data", [])],
+        # Pre-serialize with pandas so saved output matches pandas' own CSV and
+        # fixed-width text representations rather than a host-side reimplementation.
+        "csv": frame.to_csv(),
+        "text": frame.to_string(),
     }
     return {"application/vnd.bioeng.dataframe+json": payload, "text/plain": repr(frame)}
 
