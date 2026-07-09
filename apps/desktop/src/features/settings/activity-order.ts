@@ -5,7 +5,8 @@ export type ActivityRailItemId =
   | "Circuit"
   | "Python"
   | "AI"
-  | "Data";
+  | "Data"
+  | "Flapjack";
 
 // Order + hidden-by-default items are the single source of truth in
 // activity-order.json, shared verbatim with the Rust backend (which embeds the
@@ -23,23 +24,28 @@ export function isActivityRailItemId(
 }
 
 export function normalizeActivityOrder(value: unknown): ActivityRailItemId[] {
-  const activityOrder: ActivityRailItemId[] = [];
+  const kept: ActivityRailItemId[] = [];
 
   if (Array.isArray(value)) {
     for (const itemId of value) {
-      if (isActivityRailItemId(itemId) && !activityOrder.includes(itemId)) {
-        activityOrder.push(itemId);
+      if (isActivityRailItemId(itemId) && !kept.includes(itemId)) {
+        kept.push(itemId);
       }
     }
   }
 
-  for (const itemId of DEFAULT_ACTIVITY_ORDER) {
-    if (!activityOrder.includes(itemId)) {
-      activityOrder.push(itemId);
-    }
+  // A new release can add a rail item the saved order predates. Rather than
+  // append it — which buries every new feature at the end of the rail — reset
+  // to the default order so the newcomer lands in its intended place. A saved
+  // order that already holds every default item keeps its custom arrangement.
+  const missingDefaultItem = DEFAULT_ACTIVITY_ORDER.some(
+    (itemId) => !kept.includes(itemId),
+  );
+  if (missingDefaultItem) {
+    return [...DEFAULT_ACTIVITY_ORDER];
   }
 
-  return activityOrder;
+  return kept;
 }
 
 export function normalizeHiddenActivityItems(

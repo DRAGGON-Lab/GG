@@ -205,6 +205,22 @@ export function buildSimulationSource(document: CircuitDocument): string {
     ? varById.get(supplements[0].id)
     : null;
 
+  // Registry metadata for the Flapjack manifest. Reporters name the vector
+  // (a construct) and the study; the first supplement is the dose-response
+  // analyte. Embedded as JSON so they are valid Python string literals.
+  const reporterNames = document.nodes
+    .filter((node) => node.kind === "reporter")
+    .map((node) => node.name);
+  const studyLit = JSON.stringify(
+    reporterNames.length
+      ? `Circuit: ${reporterNames.join(", ")}`
+      : "Circuit simulation",
+  );
+  const vectorLit = JSON.stringify(
+    reporterNames.length ? reporterNames.join("+") : "circuit",
+  );
+  const supplementLit = JSON.stringify(supplements[0]?.name ?? "inducer");
+
   const lines: string[] = [
     "",
     "# --- simulation ---",
@@ -219,14 +235,17 @@ export function buildSimulationSource(document: CircuitDocument): string {
     lines.push(
       `doses = np.append(0, np.logspace(${round(lo)}, ${round(hi)}, ${sim.dosePoints}))`,
       "samples = []",
-      "for conc in doses:",
+      "sample_meta = []",
+      "for _i, conc in enumerate(doses):",
       "    sample = Sample(genetic_network=network, metabolism=metab, media='M9', strain='E. coli')",
       `    sample.set_supplement(${firstSupplement}, conc)`,
       "    samples.append(sample)",
+      `    sample_meta.append({'row': 0, 'col': _i, 'media': 'M9', 'strain': 'E. coli', 'vector': ${vectorLit}, 'supplements': [{'chemical': ${supplementLit}, 'concentration': float(conc)}]})`,
     );
   } else {
     lines.push(
       "samples = [Sample(genetic_network=network, metabolism=metab, media='M9', strain='E. coli')]",
+      `sample_meta = [{'row': 0, 'col': 0, 'media': 'M9', 'strain': 'E. coli', 'vector': ${vectorLit}, 'supplements': []}]`,
     );
   }
 
@@ -244,6 +263,42 @@ export function buildSimulationSource(document: CircuitDocument): string {
     "    ax.set_xlabel('Time (h)')",
     "    ax.set_ylabel('Reporter signal')",
     "    ax.set_title('Reporter timecourse (one line per sample)')",
+  );
+
+  // Emit the experiment as a Flapjack manifest under a custom MIME type. The
+  // Flapjack tab captures it (the circuit Output panel ignores this MIME) and
+  // imports the whole study on demand. Measurements map back to samples by
+  // first-seen order in the DataFrame, which matches sample creation order.
+  lines.push(
+    "",
+    "# --- flapjack manifest ---",
+    "import math as _math",
+    "_signal_names = [str(_s) for _s in df.Signal.unique()]",
+    "_signals = [{'name': _n, 'kind': 'biomass' if _n == 'Biomass' else 'fluorescence'} for _n in _signal_names]",
+    "_sample_ids = list(dict.fromkeys(df.Sample.tolist()))",
+    "_id_to_index = {_sid: _i for _i, _sid in enumerate(_sample_ids) if _i < len(sample_meta)}",
+    "_measurements = []",
+    "for _row in df.itertuples(index=False):",
+    "    _idx = _id_to_index.get(_row.Sample)",
+    "    if _idx is None:",
+    "        continue",
+    "    _val = float(_row.Measurement)",
+    "    if _math.isnan(_val):",
+    "        continue",
+    "    _measurements.append({'sampleIndex': _idx, 'signal': str(_row.Signal), 'value': _val, 'time': float(_row.Time)})",
+    "_manifest = {",
+    `    'study': {'name': ${studyLit}, 'description': 'Simulated with LOICA'},`,
+    "    'assay': {'name': 'simulation', 'machine': 'LOICA', 'temperature': 0.0},",
+    "    'signals': _signals,",
+    "    'samples': sample_meta,",
+    "    'measurements': _measurements,",
+    "}",
+    "class _FlapjackManifest:",
+    "    def __init__(self, payload):",
+    "        self._payload = payload",
+    "    def _repr_mimebundle_(self, include=None, exclude=None):",
+    "        return {'application/vnd.bioeng.flapjack+json': self._payload}",
+    "display(_FlapjackManifest(_manifest))",
   );
 
   return `${lines.join("\n")}\n`;

@@ -406,21 +406,27 @@ fn default_hidden_activity_items() -> Vec<String> {
 }
 
 fn normalize_activity_order(activity_order: Vec<String>) -> Vec<String> {
-    let mut normalized = Vec::with_capacity(ACTIVITY_RAIL_DEFAULTS.order.len());
+    let mut kept = Vec::with_capacity(ACTIVITY_RAIL_DEFAULTS.order.len());
 
     for item in activity_order {
-        if ACTIVITY_RAIL_DEFAULTS.order.contains(&item) && !normalized.contains(&item) {
-            normalized.push(item);
+        if ACTIVITY_RAIL_DEFAULTS.order.contains(&item) && !kept.contains(&item) {
+            kept.push(item);
         }
     }
 
-    for item in default_activity_order() {
-        if !normalized.contains(&item) {
-            normalized.push(item);
-        }
+    // A new release can add a rail item the saved order predates. Rather than
+    // append it — which buries every new feature at the end of the rail — reset
+    // to the default order so the newcomer lands in its intended place. A saved
+    // order that already holds every default item keeps its custom arrangement.
+    let missing_default_item = ACTIVITY_RAIL_DEFAULTS
+        .order
+        .iter()
+        .any(|item| !kept.contains(item));
+    if missing_default_item {
+        return default_activity_order();
     }
 
-    normalized
+    kept
 }
 
 fn normalize_activity_collection(activity_items: Vec<String>) -> Vec<String> {
@@ -455,12 +461,14 @@ mod tests {
     #[test]
     fn activity_rail_defaults_load_from_shared_json() {
         // Guards the shared-JSON wiring: the include_str! path resolves, the
-        // file parses, and Editor is the default first item.
+        // file parses, and Circuit is the default first item.
         let order = super::default_activity_order();
-        assert_eq!(order.first().map(String::as_str), Some("Editor"));
+        assert_eq!(order.first().map(String::as_str), Some("Circuit"));
         assert_eq!(
             order,
             vec![
+                "Circuit".to_string(),
+                "Flapjack".to_string(),
                 "Editor".to_string(),
                 "Data".to_string(),
                 "Python".to_string(),
@@ -468,6 +476,36 @@ mod tests {
             ]
         );
         assert!(super::default_hidden_activity_items().is_empty());
+    }
+
+    #[test]
+    fn normalize_activity_order_resets_when_a_new_item_appears() {
+        // A saved order predating a newly added rail item is reset to the
+        // default order (so the new item lands in place, not appended), even if
+        // the user had customized the arrangement.
+        let mut stale = super::default_activity_order();
+        stale.pop();
+        stale.reverse();
+        assert_eq!(
+            super::normalize_activity_order(stale),
+            super::default_activity_order()
+        );
+    }
+
+    #[test]
+    fn normalize_activity_order_keeps_a_complete_custom_arrangement() {
+        // A saved order holding every default item keeps its custom order;
+        // unknown items are dropped without triggering a reset.
+        let mut custom = super::default_activity_order();
+        custom.reverse();
+        assert_eq!(super::normalize_activity_order(custom.clone()), custom);
+
+        let mut with_unknown = super::default_activity_order();
+        with_unknown.push("Bogus".to_string());
+        assert_eq!(
+            super::normalize_activity_order(with_unknown),
+            super::default_activity_order()
+        );
     }
 
     #[test]

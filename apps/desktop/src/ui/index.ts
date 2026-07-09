@@ -2,6 +2,7 @@ export { BioEngMark, BioEngStudioWordmark } from "@/ui/brand";
 export { Button, IconButton, SendButton } from "@/ui/primitives/button";
 export {
   sidebarHeaderIconButtonClassName,
+  sidebarRowActiveClassName,
   sidebarRowClassName,
 } from "@/ui/primitives/sidebar-classes";
 export { SidebarHeader, SidebarSectionLabel } from "@/ui/primitives/sidebar";
@@ -42,6 +43,7 @@ export {
   Dices,
   Dna,
   FileText,
+  FlaskConical,
   Folder,
   FolderOpen,
   GripVertical,

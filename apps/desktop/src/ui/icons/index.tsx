@@ -34,6 +34,7 @@ export {
   Dices,
   Dna,
   FileText,
+  FlaskConical,
   Folder,
   FolderOpen,
   GripVertical,
