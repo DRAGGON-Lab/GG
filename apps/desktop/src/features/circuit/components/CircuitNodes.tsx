@@ -170,7 +170,7 @@ function paramSummaryText(
       if (value === undefined || value === "") {
         return null;
       }
-      if (paramSpec.key === "signal_id") {
+      if (paramSpec.uiOnly || paramSpec.key === "signal_id") {
         return null;
       }
       if (paramSpec.key === "init_concentration" && value === 0) {

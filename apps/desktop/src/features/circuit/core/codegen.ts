@@ -204,6 +204,7 @@ export function buildSimulationSource(document: CircuitDocument): string {
   const supplements = document.nodes.filter(
     (node) => node.kind === "supplement",
   );
+  const reporterStyles = simulationReporterStyles(document);
   const firstSupplement = supplements[0]
     ? varById.get(supplements[0].id)
     : null;
@@ -212,6 +213,8 @@ export function buildSimulationSource(document: CircuitDocument): string {
     "",
     "# --- simulation ---",
     "import matplotlib.pyplot as plt",
+    "",
+    `reporter_styles = ${JSON.stringify(reporterStyles)}`,
     "",
     `metab = SimulatedMetabolism('sim', lambda t: gompertz(t, ${y0}, ${ymax}, ${um}, ${lag}), lambda t: gompertz_growth_rate(t, ${y0}, ${ymax}, ${um}, ${lag}))`,
   ];
@@ -242,14 +245,43 @@ export function buildSimulationSource(document: CircuitDocument): string {
     "signals = df[df.Signal != 'Biomass']",
     "if len(signals):",
     "    fig, ax = plt.subplots(figsize=(6, 4))",
+    "    labeled_signals = set()",
     "    for (sample_id, signal), group in signals.groupby(['Sample', 'Signal']):",
-    "        ax.plot(group.Time, group.Measurement, linewidth=1)",
+    "        style = reporter_styles.get(signal, {})",
+    "        label = style.get('label', signal) if signal not in labeled_signals else None",
+    "        ax.plot(group.Time, group.Measurement, color=style.get('color'), label=label, linewidth=1)",
+    "        labeled_signals.add(signal)",
     "    ax.set_xlabel('Time (h)')",
     "    ax.set_ylabel('Reporter signal')",
     "    ax.set_title('Reporter timecourse (one line per sample)')",
+    "    if labeled_signals:",
+    "        ax.legend(title='Reporter')",
   );
 
   return `${lines.join("\n")}\n`;
+}
+
+function simulationReporterStyles(
+  document: CircuitDocument,
+): Record<string, Record<string, string>> {
+  const styles: Record<string, Record<string, string>> = {};
+  for (const node of document.nodes) {
+    if (node.kind !== "reporter") {
+      continue;
+    }
+    const signalId = node.params.signal_id;
+    const signal =
+      typeof signalId === "string" && signalId.trim() !== ""
+        ? signalId
+        : node.name;
+    const color = node.params.color;
+    if (typeof color !== "string" || !/^#[0-9a-f]{6}$/iu.test(color)) {
+      styles[signal] = { label: node.name };
+      continue;
+    }
+    styles[signal] = { color, label: `${node.name} (${color})` };
+  }
+  return styles;
 }
 
 function round(value: number): number {
