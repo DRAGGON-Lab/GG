@@ -362,6 +362,27 @@ function ParamInput({
     );
   }
 
+  if (spec.kind === "color") {
+    const color = typeof value === "string" ? value : "#4fd67f";
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          aria-label={spec.label}
+          className="h-7 w-10 cursor-pointer rounded-[6px] border border-cg-border bg-cg-surface p-0.5"
+          onChange={(event) => onChange(event.target.value)}
+          type="color"
+          value={color}
+        />
+        <input
+          className="min-w-0 flex-1 rounded-[6px] border border-cg-border bg-cg-surface px-2 py-1 font-mono text-[12px] text-cg-fg outline-none focus:border-cg-accent"
+          onChange={(event) => onChange(event.target.value)}
+          spellCheck={false}
+          value={color}
+        />
+      </div>
+    );
+  }
+
   if (spec.kind === "number") {
     return (
       <NumberInput

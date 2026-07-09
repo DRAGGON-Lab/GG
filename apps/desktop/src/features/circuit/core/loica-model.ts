@@ -24,7 +24,12 @@ export type NodeKind =
 /// fixed-length vectors (`alpha`), and — for `Sum` — nested vectors.
 export type ParamValue = number | number[] | number[][] | string;
 
-export type ParamKind = "string" | "number" | "number[]" | "number[][]";
+export type ParamKind =
+  | "string"
+  | "color"
+  | "number"
+  | "number[]"
+  | "number[][]";
 
 /// Metadata for one editable parameter, driving both the inspector form and the
 /// Loica code generation.
@@ -34,6 +39,8 @@ export type ParamSpec = {
   kind: ParamKind;
   default: ParamValue;
   help?: string;
+  /// UI-only parameters are stored with the node but omitted from generated Loica constructors.
+  uiOnly?: boolean;
   /// Fixed length for a `number[]` parameter (e.g. `Hill1.alpha` is `[basal,
   /// regulated]`). Omitted for variable-length parameters.
   arity?: number;
@@ -124,6 +131,14 @@ export const NODE_SPECS: Record<NodeKind, NodeSpec> = {
         key: "signal_id",
         kind: "string",
         label: "Signal id",
+      },
+      {
+        default: SPECIES_ACCENT.reporter,
+        help: "Canvas glyph color.",
+        key: "color",
+        kind: "color",
+        label: "Color",
+        uiOnly: true,
       },
       {
         default: 0,
