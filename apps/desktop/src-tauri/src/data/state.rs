@@ -14,6 +14,7 @@ use sqlx::SqlitePool;
 /// managed state.
 pub struct DataStore {
     pub store: SqliteStore,
+    pub pool: SqlitePool,
     /// SQL console bound to a read-only connection so ad-hoc SQL can never
     /// mutate the corpus, regardless of the statement.
     pub sql_console: SqliteSqlConsole,
@@ -43,6 +44,7 @@ impl DataStore {
 
         Ok(Self {
             store,
+            pool,
             sql_console,
             stats,
             sparql,
