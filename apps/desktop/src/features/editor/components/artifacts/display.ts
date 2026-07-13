@@ -8,7 +8,7 @@ export type DisplayData = {
 };
 
 /// A pandas DataFrame in `to_dict("split")` shape, sent under the
-/// `application/vnd.bioeng.dataframe+json` MIME type.
+/// `application/vnd.gg.dataframe+json` MIME type.
 export type DataFrameData = {
   columns: string[];
   index: string[];
@@ -19,7 +19,7 @@ export type DataFrameData = {
   text?: string;
 };
 
-export const DATAFRAME_MIME = "application/vnd.bioeng.dataframe+json";
+export const DATAFRAME_MIME = "application/vnd.gg.dataframe+json";
 
 /// MIME types the renderer can draw, richest first.
 export const RENDER_PRIORITY = [

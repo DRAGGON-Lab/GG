@@ -19,7 +19,7 @@ import {
   useProposedChangesForUri,
 } from "@/features/editor/core/proposed-changes-store";
 
-const CONTEXT_KEY = "bioengHasProposedChanges";
+const CONTEXT_KEY = "ggHasProposedChanges";
 const HEADER_HEIGHT_PX = 28;
 const DELETED_BLOCK_PADDING_PX = 10;
 
@@ -301,7 +301,7 @@ function registerProposedChangeActions(
   return [
     editor.addAction({
       contextMenuGroupId: "1_modification",
-      id: "bioeng.proposedChanges.accept",
+      id: "gg.proposedChanges.accept",
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY],
       label: "Accept Proposed Change",
       precondition: CONTEXT_KEY,
@@ -309,14 +309,14 @@ function registerProposedChangeActions(
     }),
     editor.addAction({
       contextMenuGroupId: "1_modification",
-      id: "bioeng.proposedChanges.reject",
+      id: "gg.proposedChanges.reject",
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyN],
       label: "Reject Proposed Change",
       precondition: CONTEXT_KEY,
       run: () => rejectNearest(editor),
     }),
     editor.addAction({
-      id: "bioeng.proposedChanges.acceptAll",
+      id: "gg.proposedChanges.acceptAll",
       keybindings: [
         monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyY,
       ],
@@ -330,7 +330,7 @@ function registerProposedChangeActions(
       },
     }),
     editor.addAction({
-      id: "bioeng.proposedChanges.rejectAll",
+      id: "gg.proposedChanges.rejectAll",
       keybindings: [
         monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyN,
       ],
@@ -344,14 +344,14 @@ function registerProposedChangeActions(
       },
     }),
     editor.addAction({
-      id: "bioeng.proposedChanges.next",
+      id: "gg.proposedChanges.next",
       keybindings: [monaco.KeyCode.F7],
       label: "Next Proposed Change",
       precondition: CONTEXT_KEY,
       run: () => navigateChanges(editor, 1),
     }),
     editor.addAction({
-      id: "bioeng.proposedChanges.previous",
+      id: "gg.proposedChanges.previous",
       keybindings: [monaco.KeyMod.Shift | monaco.KeyCode.F7],
       label: "Previous Proposed Change",
       precondition: CONTEXT_KEY,

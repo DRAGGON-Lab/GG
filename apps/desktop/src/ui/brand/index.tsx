@@ -1,10 +1,10 @@
-import markDarkUrl from "@/assets/brand/bioeng-mark-dark.svg";
-import markUrl from "@/assets/brand/bioeng-mark.svg";
+import markDarkUrl from "@/assets/brand/gg-mark-dark.svg";
+import markUrl from "@/assets/brand/gg-mark.svg";
 import { cx } from "@/ui/class-name";
 
-/** The Bio Eng Studio brand marks. `BioEngMark` is fixed-color artwork with one
+/** The GG Circuit brand marks. `GGCircuitMark` is fixed-color artwork with one
  * file per ground, so each theme swaps in the variant drawn for it rather than
- * recoloring; it stays no smaller than 16px tall. `BioEngStudioWordmark` is
+ * recoloring; it stays no smaller than 16px tall. `GGCircuitWordmark` is
  * drawn as text in `currentColor`, so it inherits the surrounding text color. */
 
 type BrandImageProps = {
@@ -12,7 +12,7 @@ type BrandImageProps = {
   className?: string;
 };
 
-export function BioEngMark({ alt = "", className }: BrandImageProps) {
+export function GGCircuitMark({ alt = "", className }: BrandImageProps) {
   return (
     <>
       <img
@@ -35,18 +35,17 @@ export function BioEngMark({ alt = "", className }: BrandImageProps) {
 
 const WORDMARK_FONT_FAMILY =
   '"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-const WORDMARK_VIEWBOX_WIDTH = 300;
-const WORDMARK_VIEWBOX_HEIGHT = 150;
-/// The two lines share one `textLength`, so the shorter "STUDIO" is tracked out
-/// to exactly the width of "BIO ENG" and the lockup reads as a single block.
-const WORDMARK_LINE_LENGTH = 276;
+const WORDMARK_VIEWBOX_WIDTH = 560;
+const WORDMARK_VIEWBOX_HEIGHT = 96;
+/// The single line is tracked out to this width so the lockup reads as airy,
+/// deliberate type rather than default-spaced letters.
+const WORDMARK_TEXT_LENGTH = 512;
 /// A thin weight keeps the lockup light and sleek rather than chunky.
 const WORDMARK_FONT_WEIGHT = 200;
 
-/// The product wordmark, drawn as two equal-width lines stacked into a lockup.
-/// It inherits the current text color via `currentColor`, so it sits on any
-/// theme ground without per-theme artwork.
-export function BioEngStudioWordmark({
+/// The product wordmark, drawn as a single tracked line of text in
+/// `currentColor`, so it sits on any theme ground without per-theme artwork.
+export function GGCircuitWordmark({
   className,
   size = WORDMARK_VIEWBOX_WIDTH,
 }: {
@@ -72,24 +71,11 @@ export function BioEngStudioWordmark({
         fontWeight={WORDMARK_FONT_WEIGHT}
         lengthAdjust="spacing"
         textAnchor="middle"
-        textLength={WORDMARK_LINE_LENGTH}
+        textLength={WORDMARK_TEXT_LENGTH}
         x={WORDMARK_VIEWBOX_WIDTH / 2}
-        y={62}
+        y={66}
       >
-        BIO ENG
-      </text>
-      <text
-        fill="currentColor"
-        fontFamily={WORDMARK_FONT_FAMILY}
-        fontSize={58}
-        fontWeight={WORDMARK_FONT_WEIGHT}
-        lengthAdjust="spacing"
-        textAnchor="middle"
-        textLength={WORDMARK_LINE_LENGTH}
-        x={WORDMARK_VIEWBOX_WIDTH / 2}
-        y={128}
-      >
-        STUDIO
+        GG CIRCUIT
       </text>
     </svg>
   );

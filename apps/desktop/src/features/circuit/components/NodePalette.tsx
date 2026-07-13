@@ -115,10 +115,7 @@ function PaletteGroup({
               key={kind}
               onClick={() => onAdd(kind)}
               onDragStart={(event) => {
-                event.dataTransfer.setData(
-                  "application/bioeng-circuit-node",
-                  kind,
-                );
+                event.dataTransfer.setData("application/gg-circuit-node", kind);
                 event.dataTransfer.effectAllowed = "move";
               }}
               title={spec.description}

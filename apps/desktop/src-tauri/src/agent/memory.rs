@@ -10,8 +10,8 @@ use std::sync::Mutex;
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
-use bioeng_agent::{collect_stream, AgentClient, ContentBlock, Message, StreamRequest};
-use bioeng_data::{ai::AI_MEMORY_KINDS, Database};
+use gg_agent::{collect_stream, AgentClient, ContentBlock, Message, StreamRequest};
+use gg_data::{ai::AI_MEMORY_KINDS, Database};
 
 use super::config;
 use crate::secrets::{types::AiProviderCommandError, KeychainSecretStore};

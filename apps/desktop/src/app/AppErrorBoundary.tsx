@@ -36,8 +36,8 @@ export class AppErrorBoundary extends React.Component<
             Something went wrong
           </h1>
           <p className="m-0 text-[12.5px] leading-relaxed text-cg-muted">
-            Bio Eng Studio hit an unexpected error. Reloading usually fixes it;
-            your work is saved locally.
+            GG Circuit hit an unexpected error. Reloading usually fixes it; your
+            work is saved locally.
           </p>
           <div className="flex justify-center">
             <Button onClick={() => window.location.reload()} size="sm">

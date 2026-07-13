@@ -1,4 +1,4 @@
-use bioeng_agent::{AgentClient, Credential};
+use gg_agent::{AgentClient, Credential};
 use tauri::State;
 
 use super::{

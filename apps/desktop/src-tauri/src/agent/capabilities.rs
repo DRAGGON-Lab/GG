@@ -4,8 +4,8 @@
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 
-use bioeng_agent::AgentMode;
-use bioeng_data::Database;
+use gg_agent::AgentMode;
+use gg_data::Database;
 
 pub fn dispatch(
     app: &AppHandle,

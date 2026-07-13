@@ -3,7 +3,7 @@ pub mod commands;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bioeng_python_lsp::PythonLspClient;
+use gg_python_lsp::PythonLspClient;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 
@@ -20,8 +20,8 @@ impl PythonState {
     /// Resolve the interpreter and `uv` paths from the (optional) bundled
     /// resource dir, falling back to the dev layout.
     pub fn new(resource_dir: Option<PathBuf>) -> Self {
-        let interpreter = bioeng_pyenv::python_executable(resource_dir.as_deref());
-        let uv = bioeng_pyenv::uv_executable(resource_dir.as_deref());
+        let interpreter = gg_pyenv::python_executable(resource_dir.as_deref());
+        let uv = gg_pyenv::uv_executable(resource_dir.as_deref());
         Self {
             interpreter,
             uv,

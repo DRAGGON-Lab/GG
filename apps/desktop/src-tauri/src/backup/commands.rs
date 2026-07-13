@@ -6,14 +6,14 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use bioeng_backup::{
+use gg_backup::{
     generate_master_key, install_staged_restore, master_key_from_recovery_key,
     recovery_key_for_master_key, stores::FileSystemBackupStore, BackupCreateRequest, BackupEngine,
     BackupMasterKey, BackupRestorePlan, BackupRestoreRequest, BackupRetentionPlan,
     BackupRetentionPolicy,
 };
-use bioeng_data::backup::{BackupActivityEntry, BackupActivityInput};
-use bioeng_data::{
+use gg_data::backup::{BackupActivityEntry, BackupActivityInput};
+use gg_data::{
     settings::{AppSettings, BackupSnapshotSettings},
     Database,
 };
@@ -125,7 +125,7 @@ pub fn backup_local_create(
     database: State<'_, Database>,
     secret_store: State<'_, KeychainSecretStore>,
     task_state: State<'_, BackupTaskState>,
-) -> Result<bioeng_backup::BackupSnapshotSummary, String> {
+) -> Result<gg_backup::BackupSnapshotSummary, String> {
     create_local_backup(
         &app,
         database.inner(),
@@ -142,7 +142,7 @@ pub fn backup_local_list(
     app: AppHandle,
     database: State<'_, Database>,
     secret_store: State<'_, KeychainSecretStore>,
-) -> Result<Vec<bioeng_backup::BackupSnapshotSummary>, String> {
+) -> Result<Vec<gg_backup::BackupSnapshotSummary>, String> {
     let Some(master_key) = read_master_key(&*secret_store)? else {
         return Ok(Vec::new());
     };
@@ -293,7 +293,7 @@ pub fn apply_pending_restore(app_cache_dir: &Path, app_data_dir: &Path) -> Resul
 
 pub fn start_backup_scheduler(app: AppHandle) {
     let result = thread::Builder::new()
-        .name("bioeng-backup-scheduler".to_string())
+        .name("gg-backup-scheduler".to_string())
         .spawn(move || loop {
             thread::sleep(BACKUP_SCHEDULER_POLL_INTERVAL);
             let _ = run_automatic_backup_if_due(
@@ -364,7 +364,7 @@ fn create_local_backup(
     manual: bool,
     start_message: &str,
     complete_message: &str,
-) -> Result<bioeng_backup::BackupSnapshotSummary, String> {
+) -> Result<gg_backup::BackupSnapshotSummary, String> {
     let _operation = acquire_operation(task_state)?;
     let started_at = current_timestamp_millis_string();
     set_task_status(
@@ -378,11 +378,11 @@ fn create_local_backup(
     )?;
 
     let work_dir = backup_work_dir(app)?;
-    let result: Result<bioeng_backup::BackupSnapshotSummary, String> = (|| {
+    let result: Result<gg_backup::BackupSnapshotSummary, String> = (|| {
         let master_key = load_or_create_master_key(secret_store)?;
         let (backup_root, device_id, device_name) = backup_context(app, database)?;
         fs::create_dir_all(&work_dir).map_err(|error| error.to_string())?;
-        let snapshot_database_path = work_dir.join("bioeng.snapshot.sqlite3");
+        let snapshot_database_path = work_dir.join("gg.snapshot.sqlite3");
         database.create_backup_snapshot(&snapshot_database_path)?;
 
         let app_data_dir = app
@@ -471,7 +471,7 @@ fn create_local_backup(
 
 fn record_retention_activity(
     database: &Database,
-    result: Result<BackupRetentionPlan, bioeng_backup::BackupError>,
+    result: Result<BackupRetentionPlan, gg_backup::BackupError>,
 ) -> Result<(), String> {
     let finished_at = current_timestamp_millis_string();
     match result {
@@ -601,7 +601,7 @@ fn backup_context(
     }
 
     Ok((
-        backup_root.join("bioeng-backups"),
+        backup_root.join("gg-backups"),
         settings.backup.device_id,
         settings.backup.device_name,
     ))
@@ -698,7 +698,7 @@ fn mark_backup_master_key_present(database: &Database) -> Result<(), String> {
 
 fn update_last_backup(
     database: &Database,
-    summary: &bioeng_backup::BackupSnapshotSummary,
+    summary: &gg_backup::BackupSnapshotSummary,
 ) -> Result<(), String> {
     let mut settings = database.load_app_settings()?;
     if settings.backup.master_key_created_at.is_none() {
@@ -716,7 +716,7 @@ fn update_last_backup(
 
 fn recovery_key_file_contents(recovery_key: &str) -> String {
     format!(
-        "Bio Eng Studio Backup Recovery Key\n\n{recovery_key}\n\nStore this somewhere safe. Anyone with this key and your encrypted backup files can restore the backup.\n"
+        "GG Circuit Backup Recovery Key\n\n{recovery_key}\n\nStore this somewhere safe. Anyone with this key and your encrypted backup files can restore the backup.\n"
     )
 }
 
@@ -737,7 +737,7 @@ fn reject_destination_inside_app_data(
 
     if backup_root.starts_with(&app_data_dir) {
         return Err(
-            "Choose a backup folder outside the Bio Eng Studio app data directory.".to_string(),
+            "Choose a backup folder outside the GG Circuit app data directory.".to_string(),
         );
     }
 
@@ -758,7 +758,7 @@ mod tests {
 
     fn scheduled_settings() -> AppSettings {
         let mut settings = AppSettings::default();
-        settings.backup.local_folder = Some("/tmp/bioeng-backups".to_string());
+        settings.backup.local_folder = Some("/tmp/gg-backups".to_string());
         settings.backup.automatic_interval_minutes = 60;
         settings
     }

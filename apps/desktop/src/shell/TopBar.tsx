@@ -22,7 +22,7 @@ export function TopBar({ onOpenCommandPalette }: TopBarProps) {
       >
         <Search aria-hidden="true" size={14} strokeWidth={1.8} />
         <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-[450] leading-none">
-          Bio Eng Studio
+          GG Circuit
         </span>
         <kbd className="inline-flex h-[18px] min-w-[26px] items-center justify-center rounded-[5px] border border-cg-border bg-cg-editor px-[5px] font-mono text-[10.5px] font-bold leading-none text-cg-muted">
           ⌘K

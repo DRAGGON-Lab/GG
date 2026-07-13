@@ -1,7 +1,7 @@
 use super::types::{SecretError, SecretString};
 use std::{collections::BTreeMap, sync::Mutex};
 
-const KEYCHAIN_SERVICE: &str = "build.bioeng.desktop";
+const KEYCHAIN_SERVICE: &str = "org.draggonlab.gg";
 #[cfg(target_vendor = "apple")]
 const ERR_SEC_MISSING_ENTITLEMENT: i32 = -34018;
 #[cfg(target_vendor = "apple")]

@@ -6,13 +6,13 @@
 # An "Apple Development" identity (free Apple ID, created via Xcode) is
 # preferred: its signature carries a team ID, so the keychain records a stable
 # "teamid:" partition for items and approvals survive rebuilds. The
-# self-signed "Bio Eng Studio Dev Signing" identity (scripts/setup-dev-codesign.sh)
+# self-signed "GG Circuit Dev Signing" identity (scripts/setup-dev-codesign.sh)
 # is the fallback, but securityd pins keychain items to the exact build hash
 # of non-Apple-signed apps, so the keychain still re-prompts after a rebuild.
 # If neither identity is present, the binary launches unsigned as before.
 set -euo pipefail
 
-if [ -n "${BIOENG_RUNNER_DEBUG:-}" ]; then echo "runner-invoked: $1" >&2; fi
+if [ -n "${GG_RUNNER_DEBUG:-}" ]; then echo "runner-invoked: $1" >&2; fi
 
 BIN="$1"
 
@@ -23,14 +23,14 @@ pick_identity() {
 
 pick_fallback_identity() {
   security find-identity -v -p codesigning |
-    awk '/Bio Eng Studio Dev Signing/ {print $2; exit}'
+    awk '/GG Circuit Dev Signing/ {print $2; exit}'
 }
 
-if [ "$(basename "$BIN")" = "bioeng-studio" ]; then
+if [ "$(basename "$BIN")" = "gg-circuit" ]; then
   IDENTITY=$(pick_identity)
   if [ -z "$IDENTITY" ]; then IDENTITY=$(pick_fallback_identity); fi
   if [ -n "$IDENTITY" ]; then
-    codesign --force --sign "$IDENTITY" --identifier build.bioeng.desktop "$BIN"
+    codesign --force --sign "$IDENTITY" --identifier org.draggonlab.gg "$BIN"
   fi
 fi
 

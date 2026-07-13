@@ -46,10 +46,10 @@ export function toolPresentation(
   };
 }
 
-/// Parse a `mcp__{server}__{tool}` name. The built-in `bioeng` server is
+/// Parse a `mcp__{server}__{tool}` name. The built-in `gg` server is
 /// presented as a normal tool, so it is excluded here.
 function parseMcpToolName(name: string) {
-  if (!name.startsWith("mcp__") || name.startsWith("mcp__bioeng__")) {
+  if (!name.startsWith("mcp__") || name.startsWith("mcp__gg__")) {
     return null;
   }
   const rest = name.slice("mcp__".length);
@@ -79,7 +79,7 @@ export function safeStringify(value: unknown, pretty = false): string {
 }
 
 function normalizeToolName(name: string) {
-  return name.replace(/^mcp__bioeng__/, "");
+  return name.replace(/^mcp__gg__/, "");
 }
 
 function humanizeToolName(name: string) {

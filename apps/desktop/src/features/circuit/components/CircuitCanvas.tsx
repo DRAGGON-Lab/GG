@@ -23,7 +23,7 @@ import { NODE_SPECS, type NodeKind } from "@/features/circuit/core/loica-model";
 import type { TextEditorSettings } from "@/features/settings";
 import type { ResolvedTheme } from "@/ui";
 
-const DRAG_MIME = "application/bioeng-circuit-node";
+const DRAG_MIME = "application/gg-circuit-node";
 
 const CIRCUIT_NODE_TYPES = {
   operator: OperatorNode,

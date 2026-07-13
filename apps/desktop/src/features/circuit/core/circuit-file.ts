@@ -14,9 +14,9 @@ import {
   type SimulationConfig,
 } from "@/features/circuit/core/loica-model";
 
-const STORAGE_KEY_DOC = "bioeng.circuit.document";
-const STORAGE_KEY_PATH = "bioeng.circuit.path";
-const STORAGE_KEY_SEEDED = "bioeng.circuit.seeded";
+const STORAGE_KEY_DOC = "gg.circuit.document";
+const STORAGE_KEY_PATH = "gg.circuit.path";
+const STORAGE_KEY_SEEDED = "gg.circuit.seeded";
 
 export const CIRCUIT_FILE_EXTENSION = "circuit";
 

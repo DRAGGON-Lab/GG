@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use bioeng_pyenv::{EnvStatus, InstalledPackage, OutputLine, Stream};
+use gg_pyenv::{EnvStatus, InstalledPackage, OutputLine, Stream};
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
@@ -76,7 +76,7 @@ pub async fn python_run_script(
     let state = app.state::<PythonState>();
     let interpreter = workspace_root
         .as_deref()
-        .and_then(|root| bioeng_pyenv::workspace_venv_python(Path::new(root)))
+        .and_then(|root| gg_pyenv::workspace_venv_python(Path::new(root)))
         .or_else(|| state.interpreter().cloned())
         .ok_or_else(|| "Python runtime interpreter not found".to_string())?;
 
@@ -90,8 +90,8 @@ pub async fn python_run_script(
         .unwrap_or_else(|_| std::env::temp_dir())
         .join("python-runs");
     std::fs::create_dir_all(&runs_dir).map_err(|error| error.to_string())?;
-    let runner_path = runs_dir.join("bioeng_runner.py");
-    std::fs::write(&runner_path, bioeng_pyenv::RUNNER_SOURCE).map_err(|error| error.to_string())?;
+    let runner_path = runs_dir.join("gg_runner.py");
+    std::fs::write(&runner_path, gg_pyenv::RUNNER_SOURCE).map_err(|error| error.to_string())?;
 
     // Resolve the script path: an explicit path, or a temp file holding `code`.
     let (script_path, cwd): (PathBuf, PathBuf) = match path {
@@ -116,7 +116,7 @@ pub async fn python_run_script(
         // A stdout line carrying the display sentinel is a rich MIME bundle, not
         // text. Everything else flows through as its own stream.
         let (stream, line) = match output.stream {
-            Stream::Stdout => match output.line.strip_prefix(bioeng_pyenv::DISPLAY_SENTINEL) {
+            Stream::Stdout => match output.line.strip_prefix(gg_pyenv::DISPLAY_SENTINEL) {
                 Some(json) => ("display", json.to_string()),
                 None => ("stdout", output.line),
             },
@@ -132,14 +132,9 @@ pub async fn python_run_script(
         );
     };
 
-    let exit_code = bioeng_pyenv::run_script_with_capture(
-        &interpreter,
-        &runner_path,
-        &script_path,
-        &cwd,
-        on_line,
-    )
-    .await?;
+    let exit_code =
+        gg_pyenv::run_script_with_capture(&interpreter, &runner_path, &script_path, &cwd, on_line)
+            .await?;
 
     Ok(RunResult { run_id, exit_code })
 }
@@ -153,7 +148,7 @@ pub async fn python_env_status(
 ) -> Result<EnvStatus, String> {
     let state = app.state::<PythonState>();
     let uv = require_uv(&state)?;
-    Ok(bioeng_pyenv::env_status(Path::new(&workspace_root), &uv).await)
+    Ok(gg_pyenv::env_status(Path::new(&workspace_root), &uv).await)
 }
 
 /// Create (or reuse) `workspace_root/.venv` from the bundled interpreter,
@@ -173,7 +168,7 @@ pub async fn python_env_create(
     let run_id = next_run_id();
     let on_line = line_emitter(&app, "python-env-output", run_id);
     let exit_code =
-        bioeng_pyenv::create_venv(&uv, &base_python, Path::new(&workspace_root), on_line).await?;
+        gg_pyenv::create_venv(&uv, &base_python, Path::new(&workspace_root), on_line).await?;
     Ok(RunResult { run_id, exit_code })
 }
 
@@ -185,7 +180,7 @@ pub async fn python_packages_list(
 ) -> Result<Vec<InstalledPackage>, String> {
     let state = app.state::<PythonState>();
     let uv = require_uv(&state)?;
-    bioeng_pyenv::list_packages(&uv, Path::new(&workspace_root)).await
+    gg_pyenv::list_packages(&uv, Path::new(&workspace_root)).await
 }
 
 /// Install `packages` into `workspace_root/.venv`, streaming uv's progress as
@@ -204,7 +199,7 @@ pub async fn python_packages_install(
         .ok_or_else(|| "Python runtime interpreter not found".to_string())?;
     let run_id = next_run_id();
     let on_line = line_emitter(&app, "python-env-output", run_id);
-    let exit_code = bioeng_pyenv::install_packages(
+    let exit_code = gg_pyenv::install_packages(
         &uv,
         &base_python,
         Path::new(&workspace_root),
@@ -228,8 +223,7 @@ pub async fn python_packages_uninstall(
     let run_id = next_run_id();
     let on_line = line_emitter(&app, "python-env-output", run_id);
     let exit_code =
-        bioeng_pyenv::uninstall_packages(&uv, Path::new(&workspace_root), &packages, on_line)
-            .await?;
+        gg_pyenv::uninstall_packages(&uv, Path::new(&workspace_root), &packages, on_line).await?;
     Ok(RunResult { run_id, exit_code })
 }
 
@@ -247,7 +241,7 @@ pub async fn python_runtime_status(app: AppHandle) -> Result<Value, String> {
         }));
     };
 
-    let version = bioeng_pyenv::python_version(&interpreter).await.ok();
+    let version = gg_pyenv::python_version(&interpreter).await.ok();
     Ok(serde_json::json!({
         "available": true,
         "path": interpreter.to_string_lossy(),

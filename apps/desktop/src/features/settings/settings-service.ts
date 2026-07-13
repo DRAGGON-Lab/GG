@@ -11,7 +11,7 @@ import {
   textEditorFontOptions,
 } from "@/features/settings/settings.types";
 
-const browserFallbackKey = "bioeng.settings";
+const browserFallbackKey = "gg.settings";
 const bundledMonoOption: TextEditorFontOption = {
   label: BUNDLED_MONO_FONT_FAMILY,
   value: TEXT_EDITOR_FONT_FALLBACK,

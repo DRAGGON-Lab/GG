@@ -641,7 +641,7 @@ function CircuitWorkspace() {
         description: "Generated from the Circuit workspace using LOICA.",
         format: "rdfxml",
         name: `Circuit SBOL: ${filePath ? baseName(filePath) : "Untitled circuit"}`,
-        sourceUri: "bioeng://circuit/to-sbol",
+        sourceUri: "gg://circuit/to-sbol",
       });
       setSbolExportGraphId(report.graphId);
       setSbolExportObjectCount(report.objectCount);

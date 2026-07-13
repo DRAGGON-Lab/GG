@@ -355,13 +355,11 @@ export function EditorSurface({
           <ProposedChangesChip
             documentUri={document.uri}
             onNext={() =>
-              void editorInstance
-                ?.getAction("bioeng.proposedChanges.next")
-                ?.run()
+              void editorInstance?.getAction("gg.proposedChanges.next")?.run()
             }
             onPrevious={() =>
               void editorInstance
-                ?.getAction("bioeng.proposedChanges.previous")
+                ?.getAction("gg.proposedChanges.previous")
                 ?.run()
             }
           />

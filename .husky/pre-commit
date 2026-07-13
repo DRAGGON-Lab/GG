@@ -15,13 +15,13 @@ staged="$(git diff --cached --name-only --diff-filter=ACMRD)"
 
 build_frontend() {
   say "TypeScript: build (tsc + vite)"
-  pnpm --filter @bioeng/desktop build
+  pnpm --filter @gg/desktop build
 }
 
 if printf '%s\n' "$staged" |
   grep -qE '\.(ts|tsx|js|jsx|mjs|cjs|css|html)$|(^|/)(package\.json|tsconfig.*\.json)$|^pnpm-lock\.yaml$'; then
   say "TypeScript: eslint"
-  pnpm --filter @bioeng/desktop lint
+  pnpm --filter @gg/desktop lint
   build_frontend
 fi
 

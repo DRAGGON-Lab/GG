@@ -8,7 +8,7 @@ import type {
   TableSchema,
 } from "@/features/database/types";
 
-const QUERY_HISTORY_STORAGE_KEY = "bioeng.database.query-history";
+const QUERY_HISTORY_STORAGE_KEY = "gg.database.query-history";
 const QUERY_HISTORY_LIMIT = 50;
 
 function isTauriRuntime() {

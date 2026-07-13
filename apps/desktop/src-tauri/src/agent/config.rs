@@ -1,7 +1,7 @@
 //! Local AI credential resolution: API keys live in the OS keychain, saved from the
 //! Settings panel. The agent loop and utility calls resolve a [`Credential`] here.
 
-use bioeng_agent::Credential;
+use gg_agent::Credential;
 
 use crate::secrets::{
     commands::key_handle,
@@ -83,9 +83,7 @@ mod tests {
             .unwrap();
 
         let credential = resolve_credential(&store).unwrap();
-        assert!(
-            matches!(credential, bioeng_agent::Credential::ApiKey(key) if key == "sk-keychain")
-        );
+        assert!(matches!(credential, gg_agent::Credential::ApiKey(key) if key == "sk-keychain"));
     }
 
     #[test]

@@ -11,7 +11,7 @@ mod settings;
 mod skills;
 mod workspace;
 
-use bioeng_data::Database;
+use gg_data::Database;
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 
@@ -33,7 +33,7 @@ pub fn run() {
                 .join("backup");
             backup::apply_pending_restore(&app_cache_backup_dir, &app_data_dir)
                 .map_err(std::io::Error::other)?;
-            let database_path = app_data_dir.join("bioeng.sqlite3");
+            let database_path = app_data_dir.join("gg.sqlite3");
             let legacy_settings_path = app_data_dir.join("settings.sqlite3");
             let database =
                 Database::open_with_legacy_settings(database_path, &legacy_settings_path)

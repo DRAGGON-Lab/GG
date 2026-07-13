@@ -283,7 +283,7 @@ fn user_facing_provider_message(
         }
         AiProviderErrorCode::NetworkUnavailable => {
             format!(
-                "Bio Eng Studio could not reach {provider_label}. Check the network connection and try again."
+                "GG Circuit could not reach {provider_label}. Check the network connection and try again."
             )
         }
         AiProviderErrorCode::ProviderError => original.to_string(),

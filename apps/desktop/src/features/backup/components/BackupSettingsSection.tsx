@@ -705,7 +705,7 @@ function RestoreDialog({
               strokeWidth={1.8}
             />
             <span className="min-w-0">
-              Restore staged. Restart Bio Eng Studio to install it.
+              Restore staged. Restart GG Circuit to install it.
             </span>
           </div>
         ) : null}

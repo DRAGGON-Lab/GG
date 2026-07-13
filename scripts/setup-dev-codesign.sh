@@ -12,12 +12,12 @@
 # issued it is missing, leaving only the legacy G1 (expired Feb 2023) — this
 # script installs that intermediate so the cert becomes usable.
 #
-# Failing that, this script installs a self-signed "Bio Eng Studio Dev Signing"
+# Failing that, this script installs a self-signed "GG Circuit Dev Signing"
 # identity as a fallback. It keeps the signature stable, but the keychain
 # will still re-prompt once after each rebuild.
 set -euo pipefail
 
-IDENTITY="Bio Eng Studio Dev Signing"
+IDENTITY="GG Circuit Dev Signing"
 KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
 WWDR_G3_URL="https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer"
 
@@ -82,10 +82,10 @@ openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
 # macOS `security import` cannot parse OpenSSL 3's default PKCS12 encryption;
 # pin the legacy SHA1/3DES algorithms it understands.
 openssl pkcs12 -export -out "$TMP/identity.p12" \
-  -inkey "$TMP/key.pem" -in "$TMP/cert.pem" -passout pass:bioeng-dev \
+  -inkey "$TMP/key.pem" -in "$TMP/cert.pem" -passout pass:gg-dev \
   -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1
 
-security import "$TMP/identity.p12" -k "$KEYCHAIN" -P bioeng-dev -T /usr/bin/codesign
+security import "$TMP/identity.p12" -k "$KEYCHAIN" -P gg-dev -T /usr/bin/codesign
 
 # Mark the certificate trusted for code signing (macOS asks for your login
 # password once).

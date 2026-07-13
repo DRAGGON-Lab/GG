@@ -13,7 +13,7 @@ interface ThemeProviderProps {
   defaultMode?: ThemeMode;
 }
 
-const storageKey = "bioeng.theme";
+const storageKey = "gg.theme";
 const darkModeQuery = "(prefers-color-scheme: dark)";
 const nativeBackgroundColor: Record<
   ResolvedTheme,

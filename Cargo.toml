@@ -1,11 +1,11 @@
 [workspace]
 members = [
     "apps/desktop/src-tauri",
-    "crates/bioeng-agent",
-    "crates/bioeng-backup",
-    "crates/bioeng-data",
-    "crates/bioeng-pyenv",
-    "crates/bioeng-python-lsp",
-    "crates/bioeng-workspace",
+    "crates/gg-agent",
+    "crates/gg-backup",
+    "crates/gg-data",
+    "crates/gg-pyenv",
+    "crates/gg-python-lsp",
+    "crates/gg-workspace",
 ]
 resolver = "2"

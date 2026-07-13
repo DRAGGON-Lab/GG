@@ -1,4 +1,4 @@
-.dockview-theme-bioeng {
+.dockview-theme-gg {
   --cg-dock-drag-bg: rgb(18 138 62 / 16%);
   --cg-dock-scrollbar-bg: rgb(108 102 93 / 32%);
 
@@ -43,29 +43,29 @@
   --dv-scrollbar-background-color: var(--cg-dock-scrollbar-bg);
 }
 
-:root[data-theme="dark"] .dockview-theme-bioeng {
+:root[data-theme="dark"] .dockview-theme-gg {
   --cg-dock-drag-bg: rgb(46 204 99 / 18%);
   --cg-dock-scrollbar-bg: rgb(154 155 151 / 30%);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .dockview-theme-bioeng {
+  :root:not([data-theme]) .dockview-theme-gg {
     --cg-dock-drag-bg: rgb(46 204 99 / 18%);
     --cg-dock-scrollbar-bg: rgb(154 155 151 / 30%);
   }
 }
 
-.dockview-theme-bioeng .dv-groupview > .dv-tabs-and-actions-container {
+.dockview-theme-gg .dv-groupview > .dv-tabs-and-actions-container {
   border-bottom: 1px solid var(--cg-border);
 }
 
-.dockview-theme-bioeng
+.dockview-theme-gg
   .dv-groupview.dv-active-group
   > .dv-tabs-and-actions-container {
   border-bottom-color: var(--cg-border-strong);
 }
 
-.dockview-theme-bioeng .dv-tab {
+.dockview-theme-gg .dv-tab {
   padding: 0 8px;
   margin: 0 2px 0 0;
   overflow: hidden;
@@ -79,24 +79,24 @@
 /* The first tab sits flush in the panel's top-left corner with a square edge,
    so the panel's own rounded overflow clip shapes it to the exact viewport
    radius — the tab and the window share one identical corner. */
-.dockview-theme-bioeng .dv-tabs-and-actions-container .dv-tab:first-child {
+.dockview-theme-gg .dv-tabs-and-actions-container .dv-tab:first-child {
   margin-left: 0;
   border-top-left-radius: 0;
 }
 
-.dockview-theme-bioeng
+.dockview-theme-gg
   .dv-groupview.dv-active-group
   > .dv-tabs-and-actions-container
   .dv-tab.dv-active-tab {
   box-shadow: inset 0 -1px 0 var(--cg-accent);
 }
 
-.dockview-theme-bioeng .dv-tab .dv-default-tab {
+.dockview-theme-gg .dv-tab .dv-default-tab {
   min-width: 0;
   color: inherit;
 }
 
-.dockview-theme-bioeng .dv-tab .dv-default-tab .dv-default-tab-content {
+.dockview-theme-gg .dv-tab .dv-default-tab .dv-default-tab-content {
   min-width: 0;
   overflow: hidden;
   font-size: 12px;
@@ -106,40 +106,37 @@
   white-space: nowrap;
 }
 
-.dockview-theme-bioeng
+.dockview-theme-gg
   .dv-tab
   .dv-default-tab[data-preview]
   .dv-default-tab-content {
   font-style: italic;
 }
 
-.dockview-theme-bioeng .dv-tab .dv-default-tab .dv-default-tab-action {
+.dockview-theme-gg .dv-tab .dv-default-tab .dv-default-tab-action {
   margin-left: 2px;
   color: var(--cg-muted-fg);
   border-radius: 4px;
   opacity: 0.72;
 }
 
-.dockview-theme-bioeng .dv-tab .dv-default-tab .dv-default-tab-action:hover {
+.dockview-theme-gg .dv-tab .dv-default-tab .dv-default-tab-action:hover {
   color: var(--cg-fg);
   background: var(--cg-surface-hover);
   opacity: 1;
 }
 
-.dockview-theme-bioeng .dv-tab .dv-default-tab .dv-default-tab-action .dv-svg {
+.dockview-theme-gg .dv-tab .dv-default-tab .dv-default-tab-action .dv-svg {
   width: 10px;
   height: 10px;
 }
 
 /* Unsaved buffer: show a dot in the close slot; reveal the close ✕ on hover. */
-.dockview-theme-bioeng
-  .dv-tab
-  .dv-default-tab[data-dirty]
-  .dv-default-tab-action {
+.dockview-theme-gg .dv-tab .dv-default-tab[data-dirty] .dv-default-tab-action {
   opacity: 1;
 }
 
-.dockview-theme-bioeng
+.dockview-theme-gg
   .dv-tab
   .dv-default-tab[data-dirty]
   .dv-default-tab-action
@@ -147,7 +144,7 @@
   display: none;
 }
 
-.dockview-theme-bioeng
+.dockview-theme-gg
   .dv-tab
   .dv-default-tab[data-dirty]
   .dv-default-tab-action::before {
@@ -160,7 +157,7 @@
   opacity: 0.65;
 }
 
-.dockview-theme-bioeng
+.dockview-theme-gg
   .dv-tab:hover
   .dv-default-tab[data-dirty]
   .dv-default-tab-action
@@ -168,7 +165,7 @@
   display: block;
 }
 
-.dockview-theme-bioeng
+.dockview-theme-gg
   .dv-tab:hover
   .dv-default-tab[data-dirty]
   .dv-default-tab-action::before {

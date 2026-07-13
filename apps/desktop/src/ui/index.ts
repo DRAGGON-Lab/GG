@@ -1,4 +1,4 @@
-export { BioEngMark, BioEngStudioWordmark } from "@/ui/brand";
+export { GGCircuitMark, GGCircuitWordmark } from "@/ui/brand";
 export { Button, IconButton, SendButton } from "@/ui/primitives/button";
 export {
   sidebarHeaderIconButtonClassName,

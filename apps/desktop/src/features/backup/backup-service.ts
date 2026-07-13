@@ -26,7 +26,7 @@ export async function chooseLocalBackupFolder() {
   const selected = await open({
     directory: true,
     multiple: false,
-    title: "Choose Bio Eng Studio Backup Folder",
+    title: "Choose GG Circuit Backup Folder",
   });
 
   return typeof selected === "string" ? selected : null;
@@ -38,9 +38,9 @@ export async function chooseRecoveryKeyExportPath() {
   }
 
   return save({
-    defaultPath: "bioeng-recovery-key.txt",
+    defaultPath: "gg-recovery-key.txt",
     filters: [{ name: "Text", extensions: ["txt"] }],
-    title: "Export Bio Eng Studio Recovery Key",
+    title: "Export GG Circuit Recovery Key",
   });
 }
 

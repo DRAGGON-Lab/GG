@@ -28,11 +28,11 @@ let micropipPromise: Promise<void> | undefined;
 
 const pythonPrelude = String.raw`
 import json
-from bioeng_packages import install
+from gg_packages import install
 
 ans = None
 
-def __bioeng_format_python_result(value):
+def __gg_format_python_result(value):
     return json.dumps({
         "copyValue": str(value),
         "repr": repr(value),
@@ -66,7 +66,7 @@ async function loadKernel(): Promise<PyodidePythonKernel> {
 
   return {
     formatPythonResult: (value) => {
-      const formatter = pythonGlobals.get("__bioeng_format_python_result") as (
+      const formatter = pythonGlobals.get("__gg_format_python_result") as (
         pythonValue: unknown,
       ) => string;
       return formatter(value);
@@ -94,7 +94,7 @@ function createPythonSession(pyodide: PyodideApi) {
 }
 
 function registerPackageRuntime(pyodide: PyodideApi) {
-  pyodide.registerJsModule("bioeng_packages", {
+  pyodide.registerJsModule("gg_packages", {
     install: async (packageName: unknown) => {
       await ensureMicropip(pyodide);
       const micropip = pyodide.pyimport("micropip") as {
@@ -146,7 +146,7 @@ async function evaluatePython(code: string) {
 
   try {
     const rawResult = await pyodide.runPythonAsync(code, {
-      filename: "<bioeng-python>",
+      filename: "<gg-python>",
       globals: sessionGlobals(),
     });
 

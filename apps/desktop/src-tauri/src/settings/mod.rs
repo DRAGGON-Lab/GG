@@ -1,3 +1,3 @@
 pub mod commands;
 
-pub use bioeng_data::settings::AppSettings;
+pub use gg_data::settings::AppSettings;

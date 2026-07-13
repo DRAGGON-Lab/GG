@@ -2,7 +2,7 @@ import {
   type SettingsSectionId,
   settingsSections,
 } from "@/features/settings/settings-sections";
-import { BioEngStudioWordmark } from "@/ui";
+import { GGCircuitWordmark } from "@/ui";
 
 type SettingsNavProps = {
   activeSection: SettingsSectionId;
@@ -40,7 +40,7 @@ export function SettingsNav({ activeSection, onSelect }: SettingsNavProps) {
       </div>
       <div className="min-h-3 flex-1" aria-hidden="true" />
       <div className="grid justify-items-start gap-1.5 px-1 pb-1">
-        <BioEngStudioWordmark className="h-9 w-auto text-cg-muted" />
+        <GGCircuitWordmark className="h-9 w-auto text-cg-muted" />
         <p className="m-0 text-[10.5px] leading-none text-cg-muted">
           The Biological Engineering IDE
         </p>

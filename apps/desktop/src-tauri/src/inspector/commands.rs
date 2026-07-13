@@ -1,5 +1,5 @@
-use bioeng_data::database::inspector::{DatabaseOverview, QueryResult, TableRowsPage, TableSchema};
-use bioeng_data::Database;
+use gg_data::database::inspector::{DatabaseOverview, QueryResult, TableRowsPage, TableSchema};
+use gg_data::Database;
 use tauri::State;
 
 #[tauri::command]

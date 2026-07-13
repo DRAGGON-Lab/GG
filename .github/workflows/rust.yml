@@ -49,7 +49,7 @@ jobs:
       # tauri::generate_context! embeds the frontend dist at compile time,
       # so the desktop crate cannot build without it.
       - name: Build desktop frontend
-        run: pnpm --filter @bioeng/desktop build
+        run: pnpm --filter @gg/desktop build
 
       # Keep this pin in lockstep with rust-toolchain.toml so CI and the local
       # pre-commit hook run the exact same clippy/rustfmt and never disagree.

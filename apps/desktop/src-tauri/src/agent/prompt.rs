@@ -4,8 +4,8 @@
 
 use tauri::{AppHandle, Manager};
 
-use bioeng_agent::AgentMode;
-use bioeng_data::Database;
+use gg_agent::AgentMode;
+use gg_data::Database;
 
 use super::agents::AgentDefinition;
 

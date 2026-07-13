@@ -1,6 +1,6 @@
-# Bio Eng Studio 🧬
+# GG Circuit 🧬
 
-Bio Eng Studio is a desktop IDE for biological engineers. It combines a React/Tauri workbench, a Rust service layer, local Python execution, AI-assisted editing, SQLite-backed persistence, and backup tooling so users can write Python for biological simulations, inspect project data, and iterate with an assistant in one native application.
+GG Circuit is a desktop IDE for biological engineers. It combines a React/Tauri workbench, a Rust service layer, local Python execution, AI-assisted editing, SQLite-backed persistence, and backup tooling so users can write Python for biological simulations, inspect project data, and iterate with an assistant in one native application.
 
 ## Get started
 
@@ -9,8 +9,7 @@ pnpm install
 pnpm tauri dev
 ```
 
-
-## What you can do with Bio Eng Studio
+## What you can do with GG Circuit
 
 - **Edit scientific code and notes** in a Monaco-powered workspace editor with file exploration, tabs, splits, Python language support, diagnostics, output, and history panels.
 - **Run Python locally** in two ways:
@@ -26,7 +25,7 @@ pnpm tauri dev
 This repository is a pnpm + Cargo monorepo. The most important directories are:
 
 ```text
-bioeng-studio/
+gg-circuit/
 ├── apps/
 │   └── desktop/                 # Tauri desktop app package
 │       ├── src/                 # React/TypeScript frontend
@@ -51,12 +50,12 @@ bioeng-studio/
 │       │   └── src/workspace/   # Workspace history bridge
 │       └── vendor/pyodide/      # Vendored Pyodide wheels used by the frontend REPL
 ├── crates/
-│   ├── bioeng-agent/            # Provider client, streaming parser, shared agent protocol
-│   ├── bioeng-backup/           # Backup manifests, stores, encryption, restore engine
-│   ├── bioeng-data/             # SQLite database, migrations, settings, AI memory, MCP storage
-│   ├── bioeng-pyenv/            # Python runtime helpers and matplotlib-capturing runner
-│   ├── bioeng-python-lsp/       # Python LSP protocol/client helpers
-│   └── bioeng-workspace/        # Workspace snapshots, staging, retention, restore history
+│   ├── gg-agent/            # Provider client, streaming parser, shared agent protocol
+│   ├── gg-backup/           # Backup manifests, stores, encryption, restore engine
+│   ├── gg-data/             # SQLite database, migrations, settings, AI memory, MCP storage
+│   ├── gg-pyenv/            # Python runtime helpers and matplotlib-capturing runner
+│   ├── gg-python-lsp/       # Python LSP protocol/client helpers
+│   └── gg-workspace/        # Workspace snapshots, staging, retention, restore history
 ├── scripts/                     # Developer/runtime helper scripts
 ├── Cargo.toml                   # Rust workspace definition
 ├── package.json                 # Root pnpm scripts and JS tooling
@@ -85,7 +84,7 @@ bioeng-studio/
 ### Backend, data, and runtime
 
 - **Rust + Tauri commands** expose database, settings, backup, AI, MCP, secret, skill, workspace, and Python operations to the frontend.
-- **SQLite via `bioeng-data`** stores settings, AI conversations/memory, MCP configuration, and app data.
+- **SQLite via `gg-data`** stores settings, AI conversations/memory, MCP configuration, and app data.
 - **Pyodide** runs a persistent in-browser Python REPL in a web worker for fast offline evaluations.
 - **Local Python runtime support** runs workspace scripts from the desktop side and captures matplotlib figures as base64 PNG output.
 - **MCP support** lets configured Model Context Protocol servers contribute external tools to the assistant.
@@ -127,7 +126,7 @@ The Editor page is the workspace-centered development surface. It supports:
 - proposed AI edits and inline diff/review flows;
 - workspace history snapshots and file restore operations.
 
-The editor frontend lives mainly in `apps/desktop/src/features/editor`, while workspace snapshot/restore logic lives in `crates/bioeng-workspace` and the Tauri bridge under `apps/desktop/src-tauri/src/workspace`.
+The editor frontend lives mainly in `apps/desktop/src/features/editor`, while workspace snapshot/restore logic lives in `crates/gg-workspace` and the Tauri bridge under `apps/desktop/src-tauri/src/workspace`.
 
 ### Python page
 
@@ -140,14 +139,14 @@ Existing capabilities include:
 - resetting the Python session;
 - displaying stdout, stderr, warnings, errors, result text, repr, type names, elapsed time, runtime version, and loaded packages;
 - copying result values;
-- installing packages from Python through the provided `bioeng_packages.install(...)` helper when supported by Pyodide/micropip;
+- installing packages from Python through the provided `gg_packages.install(...)` helper when supported by Pyodide/micropip;
 - using vendored/offline Pyodide assets from `apps/desktop/vendor/pyodide`.
 
 For longer workspace scripts, use the Editor page runner rather than the scratchpad.
 
 ### AI page and assistant surfaces
 
-The AI page provides general conversation threads and the Editor page embeds an assistant panel for workspace-aware help. The backend agent stack is split between `crates/bioeng-agent` and `apps/desktop/src-tauri/src/agent`.
+The AI page provides general conversation threads and the Editor page embeds an assistant panel for workspace-aware help. The backend agent stack is split between `crates/gg-agent` and `apps/desktop/src-tauri/src/agent`.
 
 Existing capabilities include:
 
@@ -182,7 +181,7 @@ Existing capabilities include:
 - entering edit mode to update cells;
 - deleting selected rows with confirmation.
 
-The frontend service layer is in `apps/desktop/src/features/database/core`, and the Rust inspector implementation is in `crates/bioeng-data/src/database/inspector.rs` with Tauri command wrappers under `apps/desktop/src-tauri/src/inspector`.
+The frontend service layer is in `apps/desktop/src/features/database/core`, and the Rust inspector implementation is in `crates/gg-data/src/database/inspector.rs` with Tauri command wrappers under `apps/desktop/src-tauri/src/inspector`.
 
 ### Settings page
 
@@ -205,7 +204,7 @@ Backup support is implemented as both a Rust crate and a Settings UI section. Th
 
 ### Skills and MCP
 
-Bio Eng Studio includes two extension mechanisms for AI work:
+GG Circuit includes two extension mechanisms for AI work:
 
 - **Skills** are local instructions/files managed by the app and loaded by the assistant when relevant.
 - **MCP servers** are external tool providers configured in settings and connected by the Tauri backend.
@@ -219,7 +218,7 @@ These are useful places to teach the assistant domain-specific lab workflows, pr
 3. `apps/desktop/src/pages/page-registry.ts` defines available pages and lazy-loads feature entry points.
 4. Feature components call frontend service modules such as `database-service.ts`, `python-service.ts`, or `agent-client.ts`.
 5. Service modules call Tauri commands exposed by `apps/desktop/src-tauri/src/*/commands.rs`.
-6. Tauri commands delegate durable work to crates under `crates/bioeng-*`.
+6. Tauri commands delegate durable work to crates under `crates/gg-*`.
 7. Persistent data is stored in SQLite; credentials go through secret storage; workspace files are accessed through Tauri filesystem APIs.
 
 ## Getting started as a user
@@ -287,7 +286,7 @@ pnpm format:check     # verify formatting
 Useful package-specific checks:
 
 ```sh
-pnpm --filter @bioeng/desktop lint
+pnpm --filter @gg/desktop lint
 cargo check --workspace
 cargo test --workspace
 ```
@@ -306,7 +305,7 @@ If you are new to the repo, follow this order:
    - Database: `apps/desktop/src/features/database/DatabasePage.tsx`
    - Settings: `apps/desktop/src/features/settings/SettingsPage.tsx`
 5. **Follow frontend-to-backend calls**: open the feature's `core/*service.ts` or `agent-client.ts`, then find the matching Tauri command in `apps/desktop/src-tauri/src`.
-6. **Read the domain crate**: inspect the corresponding `crates/bioeng-*` crate for durable logic and tests.
+6. **Read the domain crate**: inspect the corresponding `crates/gg-*` crate for durable logic and tests.
 7. **Run checks after changes**: at minimum run the relevant pnpm script and `cargo check --workspace` for backend changes.
 
 ## Where to add new work
@@ -315,9 +314,9 @@ If you are new to the repo, follow this order:
 - Add reusable UI components under `apps/desktop/src/ui` only when they are broadly useful; otherwise keep components inside the feature directory.
 - Add frontend service wrappers in the feature's `core` directory.
 - Add Tauri command wrappers under `apps/desktop/src-tauri/src/<domain>/commands.rs`.
-- Add durable Rust logic to the most relevant crate under `crates/bioeng-*`.
-- Add database schema/storage logic to `crates/bioeng-data`.
-- Add backup behavior to `crates/bioeng-backup`.
+- Add durable Rust logic to the most relevant crate under `crates/gg-*`.
+- Add database schema/storage logic to `crates/gg-data`.
+- Add backup behavior to `crates/gg-backup`.
 
 ## Troubleshooting
 
@@ -329,4 +328,4 @@ If you are new to the repo, follow this order:
 
 ## License
 
-No license file is currently included in this repository. Add one before distributing Bio Eng Studio outside the project team.
+No license file is currently included in this repository. Add one before distributing GG Circuit outside the project team.

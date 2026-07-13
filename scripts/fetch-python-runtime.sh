@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fetch a relocatable CPython (python-build-standalone) and the uv package
-# manager into the Tauri runtime resource dir, so Bio Eng Studio ships one
+# manager into the Tauri runtime resource dir, so GG Circuit ships one
 # self-contained interpreter that powers both the editor LSP (python-lsp-server
 # + ruff) and script execution, plus the uv binary that creates and manages a
 # per-workspace `.venv`. Re-runnable: it replaces the runtime in place.

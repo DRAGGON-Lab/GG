@@ -85,8 +85,8 @@ import type { PageRuntime } from "@/pages/page.types";
 import { Button, PanelLeftOpen, Plus, useTheme } from "@/ui";
 import { dockviewThemeByMode } from "@/workbench/theme";
 
-const STORAGE_KEY_ROOT = "bioeng.editor.workspaceRoot";
-const STORAGE_KEY_OPEN = "bioeng.editor.openPaths";
+const STORAGE_KEY_ROOT = "gg.editor.workspaceRoot";
+const STORAGE_KEY_OPEN = "gg.editor.openPaths";
 
 const TEXT_EXTENSIONS = new Set([
   ".py",

@@ -185,7 +185,7 @@ function initialChunkBudgetPlugin(): PluginOption {
         }
       }
     },
-    name: "bioeng-initial-chunk-budget",
+    name: "gg-initial-chunk-budget",
   };
 }
 
@@ -233,7 +233,7 @@ export default defineConfig(async () => ({
     alias: {
       "@": new URL("./src", import.meta.url).pathname,
       "@protocol": new URL(
-        "../../crates/bioeng-agent/bindings/agent-protocol.ts",
+        "../../crates/gg-agent/bindings/agent-protocol.ts",
         import.meta.url,
       ).pathname,
     },

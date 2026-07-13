@@ -7,11 +7,11 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
 
-use bioeng_agent::{
+use gg_agent::{
     collect_stream, AgentClient, AgentMessage, AgentMode, ContentBlock, Message, PermissionPrompt,
     SessionMessageNotification, StreamDelta, StreamRequest, Usage, WorkspaceRequest,
 };
-use bioeng_data::Database;
+use gg_data::Database;
 
 use super::{
     agents::AgentDefinition,

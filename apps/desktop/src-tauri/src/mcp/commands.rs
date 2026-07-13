@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Manager, State};
 
-use bioeng_data::{mcp::McpServerInput, Database};
+use gg_data::{mcp::McpServerInput, Database};
 
 use super::registry::{McpRegistry, McpServerView};
 

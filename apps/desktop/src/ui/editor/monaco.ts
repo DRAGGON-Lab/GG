@@ -8,7 +8,7 @@ import type { ResolvedTheme } from "@/ui";
 // The syntax palette maps to fluorophore emission channels — green keywords
 // (GFP), magenta strings (a second channel), amber numbers, mint operators —
 // against the warm-bone / microscopy-black editor grounds.
-const bioengEditorLightTheme: Monaco.editor.IStandaloneThemeData = {
+const ggEditorLightTheme: Monaco.editor.IStandaloneThemeData = {
   base: "vs",
   inherit: true,
   rules: [
@@ -34,7 +34,7 @@ const bioengEditorLightTheme: Monaco.editor.IStandaloneThemeData = {
   },
 };
 
-const bioengEditorDarkTheme: Monaco.editor.IStandaloneThemeData = {
+const ggEditorDarkTheme: Monaco.editor.IStandaloneThemeData = {
   base: "vs-dark",
   inherit: true,
   rules: [
@@ -70,7 +70,7 @@ export const editorUnicodeHighlightOptions = {
   nonBasicASCII: false,
 };
 
-/// Worker bootstrap plus the Bio Eng Studio light/dark editor themes. Safe to call from
+/// Worker bootstrap plus the GG Circuit light/dark editor themes. Safe to call from
 /// every Monaco-backed surface; the heavy work runs once.
 export function configureMonaco(monaco: typeof Monaco) {
   if (!globalThis.MonacoEnvironment) {
@@ -86,8 +86,8 @@ export function configureMonaco(monaco: typeof Monaco) {
 
   configured = true;
 
-  monaco.editor.defineTheme("bioengEditorLight", bioengEditorLightTheme);
-  monaco.editor.defineTheme("bioengEditorDark", bioengEditorDarkTheme);
+  monaco.editor.defineTheme("ggEditorLight", ggEditorLightTheme);
+  monaco.editor.defineTheme("ggEditorDark", ggEditorDarkTheme);
 }
 
 export function getEditorTheme(
@@ -97,7 +97,7 @@ export function getEditorTheme(
   const effectiveTheme =
     textEditorTheme === "matchApp" ? resolvedTheme : textEditorTheme;
 
-  return effectiveTheme === "dark" ? "bioengEditorDark" : "bioengEditorLight";
+  return effectiveTheme === "dark" ? "ggEditorDark" : "ggEditorLight";
 }
 
 export function getTextEditorLineHeight(fontSize: number) {

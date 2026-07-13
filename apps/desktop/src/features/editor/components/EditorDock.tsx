@@ -7,7 +7,7 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 
 import { useEditorPageContext } from "@/features/editor/editor-page-context";
-import { BioEngStudioWordmark } from "@/ui";
+import { GGCircuitWordmark } from "@/ui";
 
 export type EditorDockPanelKind =
   | "assistant"
@@ -74,7 +74,7 @@ export function EditorEmptySurface() {
       aria-label="Editor empty state"
       className="grid h-full min-h-0 min-w-0 animate-[app-surface-in_140ms_ease-out] place-items-center bg-cg-editor motion-reduce:animate-none"
     >
-      <BioEngStudioWordmark className="text-cg-muted opacity-65" size={360} />
+      <GGCircuitWordmark className="text-cg-muted opacity-65" size={360} />
     </section>
   );
 }

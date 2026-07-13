@@ -21,7 +21,7 @@ export type TextEditorSettings = {
 };
 
 /** Vestigial platform account settings, retained for settings compatibility.
- * Bio Eng Studio runs AI locally via provider API keys; see ai-providers.ts. */
+ * GG Circuit runs AI locally via provider API keys; see ai-providers.ts. */
 export type PlatformSettings = {
   serverUrl: string;
   accountId: string | null;
@@ -111,8 +111,8 @@ export const TEXT_EDITOR_FONT_FALLBACK =
 
 export const textEditorThemeOptions = [
   { label: "Match Interface", value: "matchApp" },
-  { label: "Bio Eng Studio Light", value: "light" },
-  { label: "Bio Eng Studio Dark", value: "dark" },
+  { label: "GG Circuit Light", value: "light" },
+  { label: "GG Circuit Dark", value: "dark" },
 ] as const satisfies readonly {
   label: string;
   value: TextEditorTheme;
@@ -167,7 +167,7 @@ export const defaultTextEditorSettings: TextEditorSettings = {
   formatOnSave: false,
 };
 
-export const DEFAULT_PLATFORM_SERVER_URL = "https://api.bioeng.build";
+export const DEFAULT_PLATFORM_SERVER_URL = "https://api.gg.draggonlab.org";
 
 export const defaultPlatformSettings: PlatformSettings = {
   serverUrl: DEFAULT_PLATFORM_SERVER_URL,

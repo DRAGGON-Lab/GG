@@ -1,4 +1,4 @@
-use bioeng_data::Database;
+use gg_data::Database;
 use std::{collections::BTreeSet, sync::OnceLock};
 use tauri::State;
 

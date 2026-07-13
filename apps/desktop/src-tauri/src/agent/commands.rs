@@ -2,10 +2,8 @@ use serde_json::{json, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, State};
 
-use bioeng_agent::{
-    AgentMessage, Message, PermissionBehavior, PromptContextAttachment, PromptRequest,
-};
-use bioeng_data::Database;
+use gg_agent::{AgentMessage, Message, PermissionBehavior, PromptContextAttachment, PromptRequest};
+use gg_data::Database;
 
 use super::{
     agents, conversation,

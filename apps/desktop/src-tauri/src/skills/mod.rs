@@ -325,7 +325,7 @@ mod tests {
 
     #[test]
     fn skill_files_stay_inside_the_skill_folder() {
-        let root = std::env::temp_dir().join(format!("bioeng-skill-test-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("gg-skill-test-{}", std::process::id()));
         let skill_dir = root.join("skills").join("demo");
         fs::create_dir_all(&skill_dir).unwrap();
         fs::write(root.join("secret.txt"), "secret").unwrap();

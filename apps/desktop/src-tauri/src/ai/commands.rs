@@ -1,4 +1,4 @@
-use bioeng_data::{
+use gg_data::{
     ai::{
         AiConversation, AiConversationContextInput, AiConversationCreateInput,
         AiConversationSummary, AiMemoryConclusion,
@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tauri::{AppHandle, Manager, State};
 
-use bioeng_agent::{collect_stream, AgentClient, ContentBlock, Message, StreamRequest};
+use gg_agent::{collect_stream, AgentClient, ContentBlock, Message, StreamRequest};
 
 use crate::{
     agent::config,

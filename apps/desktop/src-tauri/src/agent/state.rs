@@ -7,7 +7,7 @@ use serde_json::Value;
 use tauri::async_runtime::JoinHandle;
 use tokio::sync::oneshot;
 
-use bioeng_agent::Message;
+use gg_agent::Message;
 
 /// The webview's answer to a parked workspace request: the tool result value and
 /// whether it represents an error.

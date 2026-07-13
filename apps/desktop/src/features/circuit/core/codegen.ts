@@ -13,7 +13,7 @@ import {
   toPythonVar,
 } from "@/features/circuit/core/loica-model";
 
-export const SBOL_EXPORT_MIME = "application/vnd.bioeng.sbol-export+json";
+export const SBOL_EXPORT_MIME = "application/vnd.gg.sbol-export+json";
 
 /// Resolved wiring for one operator: the variable names feeding its inputs (in
 /// handle order) and the variable names it outputs to.
@@ -171,7 +171,7 @@ function sbolCompMetadata(node: CircuitNode): Record<string, unknown> | null {
       roles: part.roles,
       sbol_class: part.sbolClass,
     })),
-    source: "bioeng-sbol-db",
+    source: "gg-sbol-db",
   };
 }
 
@@ -263,11 +263,11 @@ function buildSbolSetupSource(
 ): string[] {
   const lines: string[] = [
     "# --- SBOL components ---",
-    "sbol3.set_namespace('https://bioeng.studio/circuit')",
+    "sbol3.set_namespace('https://gg.draggonlab.org/circuit')",
     "sbol_doc = sbol3.Document()",
-    "_bioeng_sbol_components = {}",
+    "_gg_sbol_components = {}",
     "",
-    "def _bioeng_sbol_role_uri(role):",
+    "def _gg_sbol_role_uri(role):",
     "    mapping = {",
     "        'promoter': sbol3.SO_PROMOTER,",
     "        'rbs': sbol3.SO_RBS,",
@@ -278,7 +278,7 @@ function buildSbolSetupSource(
     "    }",
     "    return mapping.get(role)",
     "",
-    "def _bioeng_sbol_type_uri(node_kind, role):",
+    "def _gg_sbol_type_uri(node_kind, role):",
     "    if node_kind == 'supplement':",
     "        return sbol3.SBO_SIMPLE_CHEMICAL",
     "    if role == 'rna':",
@@ -287,27 +287,27 @@ function buildSbolSetupSource(
     "        return sbol3.SBO_PROTEIN",
     "    return sbol3.SBO_DNA",
     "",
-    "def _bioeng_sbol_component(identity, name, node_kind, role, roles):",
-    "    if identity in _bioeng_sbol_components:",
-    "        return _bioeng_sbol_components[identity]",
+    "def _gg_sbol_component(identity, name, node_kind, role, roles):",
+    "    if identity in _gg_sbol_components:",
+    "        return _gg_sbol_components[identity]",
     "    role_values = []",
     "    for value in roles or []:",
     "        if value and value not in role_values:",
     "            role_values.append(value)",
-    "    role_uri = _bioeng_sbol_role_uri(role)",
+    "    role_uri = _gg_sbol_role_uri(role)",
     "    if role_uri and role_uri not in role_values:",
     "        role_values.append(role_uri)",
-    "    comp = sbol3.Component(identity, _bioeng_sbol_type_uri(node_kind, role), roles=role_values or None, name=name)",
+    "    comp = sbol3.Component(identity, _gg_sbol_type_uri(node_kind, role), roles=role_values or None, name=name)",
     "    sbol_doc.add(comp)",
-    "    _bioeng_sbol_components[identity] = comp",
+    "    _gg_sbol_components[identity] = comp",
     "    return comp",
     "",
-    "def _bioeng_node_sbol_comp(identity, name, node_kind, parts):",
+    "def _gg_node_sbol_comp(identity, name, node_kind, parts):",
     "    if not parts:",
-    "        return _bioeng_sbol_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
+    "        return _gg_sbol_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
     "    part_components = []",
     "    for part in parts:",
-    "        part_components.append(_bioeng_sbol_component(",
+    "        part_components.append(_gg_sbol_component(",
     "            part.get('iri') or part.get('display_id'),",
     "            part.get('name') or part.get('display_id'),",
     "            node_kind,",
@@ -316,7 +316,7 @@ function buildSbolSetupSource(
     "        ))",
     "    if len(part_components) == 1:",
     "        return part_components[0]",
-    "    comp = _bioeng_sbol_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
+    "    comp = _gg_sbol_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
     "    comp.features = [sbol3.SubComponent(part) for part in part_components]",
     "    comp.constraints = [sbol3.Constraint(sbol3.SBOL_PRECEDES, comp.features[i], comp.features[i + 1]) for i in range(len(comp.features) - 1)]",
     "    return comp",
@@ -329,7 +329,7 @@ function buildSbolSetupSource(
       continue;
     }
     lines.push(
-      `${sbolVarName(varName)} = _bioeng_node_sbol_comp(${pyLiteral(
+      `${sbolVarName(varName)} = _gg_node_sbol_comp(${pyLiteral(
         sbolNodeIdentity(node),
       )}, ${pyLiteral(node.name)}, ${pyLiteral(node.kind)}, ${pyDataLiteral(
         sbolCompMetadata(node)?.parts ?? [],
@@ -345,7 +345,7 @@ function sbolVarName(varName: string): string {
 }
 
 function sbolNodeIdentity(node: CircuitNode): string {
-  return `bioeng_${node.kind}_${node.id.replace(/[^A-Za-z0-9_]/g, "_")}`;
+  return `gg_${node.kind}_${node.id.replace(/[^A-Za-z0-9_]/g, "_")}`;
 }
 
 /// Build the simulation harness: a Gompertz metabolism, one sample per point of
@@ -496,7 +496,7 @@ export function buildSimulationSource(document: CircuitDocument): string {
     "    def __init__(self, payload):",
     "        self._payload = payload",
     "    def _repr_mimebundle_(self, include=None, exclude=None):",
-    "        return {'application/vnd.bioeng.flapjack+json': self._payload}",
+    "        return {'application/vnd.gg.flapjack+json': self._payload}",
     "display(_FlapjackManifest(_manifest))",
   );
 

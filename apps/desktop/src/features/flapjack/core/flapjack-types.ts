@@ -125,12 +125,12 @@ export type Schema = { tables: SchemaTable[] };
 /// MIME type a circuit simulation emits its experiment manifest under, via the
 /// display protocol. Diverted from the visible output and imported into the
 /// store on demand.
-export const FLAPJACK_MANIFEST_MIME = "application/vnd.bioeng.flapjack+json";
+export const FLAPJACK_MANIFEST_MIME = "application/vnd.gg.flapjack+json";
 
 /// MIME type the analysis runner emits a computed characterization under, via
 /// the display protocol, for the frontend to render and persist.
 export const FLAPJACK_CHARACTERIZATION_MIME =
-  "application/vnd.bioeng.flapjack-characterization+json";
+  "application/vnd.gg.flapjack-characterization+json";
 
 export type SignalManifest = {
   name: string;

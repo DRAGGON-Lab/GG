@@ -2,13 +2,13 @@ import type { DockviewTheme } from "dockview-react";
 
 export const dockviewThemeByMode = {
   light: {
-    className: "dockview-theme-light dockview-theme-bioeng",
+    className: "dockview-theme-light dockview-theme-gg",
     colorScheme: "light",
-    name: "bioengLight",
+    name: "ggLight",
   },
   dark: {
-    className: "dockview-theme-dark dockview-theme-bioeng",
+    className: "dockview-theme-dark dockview-theme-gg",
     colorScheme: "dark",
-    name: "bioengDark",
+    name: "ggDark",
   },
 } as const satisfies Record<"light" | "dark", DockviewTheme>;

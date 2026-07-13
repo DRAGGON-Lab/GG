@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use bioeng_workspace::{
+use gg_workspace::{
     history_status, is_git_repo, CheckpointChange, CheckpointFileDiff, CheckpointSummary,
     HistoryStatus, HistoryStore, RestoreResult, WorkspaceError,
 };

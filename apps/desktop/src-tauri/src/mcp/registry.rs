@@ -14,7 +14,7 @@ use rmcp::transport::{
 };
 use rmcp::{RoleClient, ServiceExt};
 
-use bioeng_data::{
+use gg_data::{
     mcp::{McpServerConfig, McpTransport},
     Database,
 };
@@ -291,7 +291,7 @@ fn http_transport(
 fn client_info() -> ClientInfo {
     ClientInfo::new(
         ClientCapabilities::default(),
-        Implementation::new("bioeng", env!("CARGO_PKG_VERSION")),
+        Implementation::new("gg", env!("CARGO_PKG_VERSION")),
     )
 }
 

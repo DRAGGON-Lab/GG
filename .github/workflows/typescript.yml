@@ -33,7 +33,7 @@ jobs:
         run: pnpm format:check
 
       - name: Lint
-        run: pnpm --filter @bioeng/desktop lint
+        run: pnpm --filter @gg/desktop lint
 
       - name: Build desktop frontend
-        run: pnpm --filter @bioeng/desktop build
+        run: pnpm --filter @gg/desktop build
