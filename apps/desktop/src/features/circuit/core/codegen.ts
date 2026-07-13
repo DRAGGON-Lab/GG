@@ -1,5 +1,5 @@
 /// Graph → Loica code generation. Emits a runnable script against the Loica
-/// v1.0.6 API: species are declared first, then operators wired by object
+/// v1.0.7 API: species are declared first, then operators wired by object
 /// reference from the graph edges, then assembled into a `GeneticNetwork`.
 ///
 /// Wiring is graph-owned: an operator's `input=` / `output=` arguments come from
@@ -361,7 +361,6 @@ export function buildSimulationSource(document: CircuitDocument): string {
   const supplements = document.nodes.filter(
     (node) => node.kind === "supplement",
   );
-  const reporterStyles = simulationReporterStyles(document);
   const firstSupplement = supplements[0]
     ? varById.get(supplements[0].id)
     : null;
@@ -386,8 +385,6 @@ export function buildSimulationSource(document: CircuitDocument): string {
     "",
     "# --- simulation ---",
     "import plotly.graph_objects as go",
-    "",
-    `reporter_styles = ${JSON.stringify(reporterStyles)}`,
     "",
     `metab = SimulatedMetabolism('sim', lambda t: gompertz(t, ${y0}, ${ymax}, ${um}, ${lag}), lambda t: gompertz_growth_rate(t, ${y0}, ${ymax}, ${um}, ${lag}))`,
   ];
@@ -423,6 +420,8 @@ export function buildSimulationSource(document: CircuitDocument): string {
     `assay = Assay(samples, n_measurements=${sim.nMeasurements}, interval=${sim.interval}, biomass_signal_id='od')`,
     `assay.run(${runArgs})`,
     "df = assay.measurements",
+    "_reporter_hexcolors = {reporter.name: reporter.color for sample in samples for reporter in sample.reporters}",
+    "df['HexColor'] = df['Signal'].map(_reporter_hexcolors)",
     "display(df)",
     "",
     "signals = df[df.Signal != 'Biomass']",
@@ -430,8 +429,8 @@ export function buildSimulationSource(document: CircuitDocument): string {
     "    fig = go.Figure()",
     "    labeled_signals = set()",
     "    for (sample_id, signal), group in signals.groupby(['Sample', 'Signal']):",
-    "        style = reporter_styles.get(signal, {})",
-    "        label = style.get('label', signal)",
+    "        label = signal",
+    "        hexcolor = group.HexColor.dropna().iloc[0] if 'HexColor' in group and group.HexColor.notna().any() else None",
     "        show_legend = signal not in labeled_signals",
     "        fig.add_trace(go.Scatter(",
     "            x=group.Time,",
@@ -440,7 +439,7 @@ export function buildSimulationSource(document: CircuitDocument): string {
     "            name=label,",
     "            legendgroup=signal,",
     "            showlegend=show_legend,",
-    "            line=dict(color=style.get('color'), width=1.8),",
+    "            line=dict(color=hexcolor, width=1.8),",
     "            marker=dict(size=4),",
     "            customdata=np.stack([group.Sample, group.Signal], axis=-1),",
     "            hovertemplate='Time: %{x:.3g} h<br>Measurement: %{y:.3g}<br>Sample: %{customdata[0]}<br>Signal: %{customdata[1]}<extra></extra>',",
@@ -501,29 +500,6 @@ export function buildSimulationSource(document: CircuitDocument): string {
   );
 
   return `${lines.join("\n")}\n`;
-}
-
-function simulationReporterStyles(
-  document: CircuitDocument,
-): Record<string, Record<string, string>> {
-  const styles: Record<string, Record<string, string>> = {};
-  for (const node of document.nodes) {
-    if (node.kind !== "reporter") {
-      continue;
-    }
-    const signalId = node.params.signal_id;
-    const signal =
-      typeof signalId === "string" && signalId.trim() !== ""
-        ? signalId
-        : node.name;
-    const color = node.params.color;
-    if (typeof color !== "string" || !/^#[0-9a-f]{6}$/iu.test(color)) {
-      styles[signal] = { label: node.name };
-      continue;
-    }
-    styles[signal] = { color, label: node.name };
-  }
-  return styles;
 }
 
 function round(value: number): number {

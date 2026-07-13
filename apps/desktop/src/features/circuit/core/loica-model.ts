@@ -134,11 +134,10 @@ export const NODE_SPECS: Record<NodeKind, NodeSpec> = {
       },
       {
         default: SPECIES_ACCENT.reporter,
-        help: "Canvas glyph color.",
+        help: "Reporter GeneProduct color, emitted to LOICA and measurement dataframes.",
         key: "color",
         kind: "color",
-        label: "Color",
-        uiOnly: true,
+        label: "Hex color",
       },
       {
         default: 0,
