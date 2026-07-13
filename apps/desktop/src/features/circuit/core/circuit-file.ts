@@ -5,6 +5,7 @@ import {
   type CircuitEdge,
   type CircuitNode,
   DEFAULT_SIMULATION,
+  defaultParams,
   emptyDocument,
   exampleDocument,
   NODE_SPECS,
@@ -64,11 +65,12 @@ function parseNodes(value: unknown): CircuitNode[] {
     const position = record.position as
       | { x?: unknown; y?: unknown }
       | undefined;
+    const nodeKind = kind as NodeKind;
     const node: CircuitNode = {
       id,
-      kind: kind as NodeKind,
+      kind: nodeKind,
       name: typeof record.name === "string" ? record.name : kind,
-      params: parseParams(record.params),
+      params: { ...defaultParams(nodeKind), ...parseParams(record.params) },
       position: {
         x: typeof position?.x === "number" ? position.x : 0,
         y: typeof position?.y === "number" ? position.y : 0,

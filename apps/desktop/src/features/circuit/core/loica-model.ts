@@ -481,6 +481,7 @@ export function exampleDocument(): CircuitDocument {
         kind: "reporter",
         name: "GFP",
         params: {
+          color: SPECIES_ACCENT.reporter,
           degradation_rate: 0,
           init_concentration: 0,
           signal_id: "gfp",
