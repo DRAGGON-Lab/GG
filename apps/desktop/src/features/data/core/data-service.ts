@@ -77,7 +77,7 @@ export function loadGraphTriples(options: {
 
 export function loadObjects(options: {
   after?: string | null;
-  graphId?: string | null;
+  iriQuery?: string | null;
   limit?: number;
   role?: string | null;
   sbolClass?: string | null;
@@ -88,7 +88,7 @@ export function loadObjects(options: {
 
   return invoke<ObjectList>("data_objects_list", {
     after: options.after ?? null,
-    graphId: options.graphId ?? null,
+    iriQuery: options.iriQuery ?? null,
     limit: options.limit ?? null,
     role: options.role ?? null,
     sbolClass: options.sbolClass ?? null,
