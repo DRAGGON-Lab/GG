@@ -33,23 +33,35 @@ const SYNBIO_PACKAGES = [
   "numpy",
   "pandas",
   "matplotlib",
+  "loica==1.0.7",
 ];
 
 /// PEP 503-normalized names of the synthetic-biology stack, used to tell whether
 /// it is already installed.
-const SYNBIO_PACKAGE_NAMES = SYNBIO_PACKAGES.map((name) =>
-  name.toLowerCase().replace(/[-_.]+/g, "-"),
-);
+const SYNBIO_PACKAGE_NAMES = [
+  "sbol3",
+  "sbol-utilities",
+  "numpy",
+  "pandas",
+  "matplotlib",
+  "loica",
+];
 
 /// Whether every package in the synthetic-biology stack is installed.
 function isSynbioInstalled(packages: InstalledPackage[] | null): boolean {
   if (!packages) {
     return false;
   }
-  const installed = new Set(
-    packages.map((pkg) => pkg.name.toLowerCase().replace(/[-_.]+/g, "-")),
+  const installed = new Map(
+    packages.map((pkg) => [
+      pkg.name.toLowerCase().replace(/[-_.]+/g, "-"),
+      pkg.version,
+    ]),
   );
-  return SYNBIO_PACKAGE_NAMES.every((name) => installed.has(name));
+  return (
+    SYNBIO_PACKAGE_NAMES.every((name) => installed.has(name)) &&
+    installed.get("loica") === "1.0.7"
+  );
 }
 
 /// Per-workspace Python environment manager. The workspace `.venv` (in the
