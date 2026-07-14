@@ -205,6 +205,7 @@ export function nodeAssignment(
 /// client used to pull component definitions.
 function buildImports(options: {
   sbolDb: boolean;
+  flapjack: boolean;
   simulation: boolean;
 }): string[] {
   const lines: string[] = [];
@@ -218,6 +219,9 @@ function buildImports(options: {
   lines.push("from loica import *");
   if (options.sbolDb) {
     lines.push("from sbol_db import SbolDbClient");
+  }
+  if (options.flapjack) {
+    lines.push("from flapjack import Flapjack");
   }
   lines.push("");
   return lines;
@@ -411,6 +415,25 @@ function buildSbolClientSource(sbolDbUrl?: string | null): string[] {
   ];
 }
 
+/// The `flapjack` client block. When the embedded Flapjack API server is running
+/// its loopback URL is passed here; the script binds a pre-authenticated
+/// `pyFlapjack` client to it (the server accepts any local credentials), so the
+/// circuit can upload measurements and request analyses against the same
+/// Flapjack installation the Flapjack tab shows. `flapjack` is `None` when the
+/// server is unavailable.
+function buildFlapjackClientSource(flapjackUrl?: string | null): string[] {
+  if (!flapjackUrl) {
+    return ["# --- flapjack client (unavailable) ---", "flapjack = None", ""];
+  }
+  const urlBase = flapjackUrl.replace(/^https?:\/\//, "");
+  return [
+    "# --- flapjack client ---",
+    `flapjack = Flapjack(${pyLiteral(urlBase)})`,
+    "flapjack.log_in('gg', 'gg')",
+    "",
+  ];
+}
+
 function sbolVarName(varName: string): string {
   return `${varName}_sbol`;
 }
@@ -582,7 +605,11 @@ export function buildSbolExportSource(
   sbolDbUrl?: string | null,
 ): string {
   const lines = [
-    ...buildImports({ sbolDb: Boolean(sbolDbUrl), simulation: false }),
+    ...buildImports({
+      sbolDb: Boolean(sbolDbUrl),
+      flapjack: false,
+      simulation: false,
+    }),
     buildNetworkSource(document, sbolDbUrl).trimEnd(),
     "",
     "# --- SBOL export ---",
@@ -618,12 +645,15 @@ export function buildSbolExportSource(
 export function generateScript(
   document: CircuitDocument,
   sbolDbUrl?: string | null,
+  flapjackUrl?: string | null,
 ): string {
   const imports = buildImports({
     sbolDb: Boolean(sbolDbUrl),
+    flapjack: Boolean(flapjackUrl),
     simulation: true,
   }).join("\n");
-  return `${imports}\n${buildNetworkSource(document, sbolDbUrl)}${buildSimulationSource(document)}`;
+  const flapjackClient = buildFlapjackClientSource(flapjackUrl).join("\n");
+  return `${imports}\n${flapjackClient}\n${buildNetworkSource(document, sbolDbUrl)}${buildSimulationSource(document)}`;
 }
 
 // --- Reverse parse: edit the code, sync params back ---

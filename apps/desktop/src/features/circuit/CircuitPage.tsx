@@ -45,6 +45,7 @@ import {
 } from "@/features/circuit/core/circuit-file";
 import {
   ensureCircuitEnv,
+  getFlapjackServerUrl,
   getSbolServerUrl,
   isTauriRuntime,
   runCircuitScript,
@@ -200,6 +201,10 @@ function CircuitWorkspace() {
   // The embedded sbol-db server's loopback URL, resolved once. Passed into the
   // generated script so it can pull SBOL parts from the corpus over HTTP.
   const [sbolDbUrl, setSbolDbUrl] = useState<string | null>(null);
+  // The embedded Flapjack API server's loopback URL, resolved once (its Python
+  // environment and process are brought up on first use). Passed into the
+  // generated script so it can construct a pre-authenticated pyFlapjack client.
+  const [flapjackUrl, setFlapjackUrl] = useState<string | null>(null);
 
   const addCounterRef = useRef(0);
   const envRootRef = useRef<string | null>(null);
@@ -226,14 +231,19 @@ function CircuitWorkspace() {
         setSbolDbUrl(url);
       }
     });
+    getFlapjackServerUrl().then((url) => {
+      if (!cancelled) {
+        setFlapjackUrl(url);
+      }
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
   const generatedScript = useMemo(
-    () => generateScript(document, sbolDbUrl),
-    [document, sbolDbUrl],
+    () => generateScript(document, sbolDbUrl, flapjackUrl),
+    [document, sbolDbUrl, flapjackUrl],
   );
 
   const dirty = useMemo(

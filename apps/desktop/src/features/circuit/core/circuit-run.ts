@@ -27,9 +27,19 @@ const CIRCUIT_ENV_MARKER = "circuit-runtime-req.txt";
 /// Packages the managed environment needs for circuit simulation. Plotly backs
 /// the interactive reporter plot; loica is the simulation engine; sbol-db is
 /// the client for the app's embedded SBOL server, letting scripts read and
-/// write the corpus the Data tab shows.
-const REQUIRED_PACKAGES = [LOICA_REQUIREMENT, "plotly", "sbol-db"];
-const REQUIRED_NAMES = ["loica", "plotly", "sbol-db"];
+/// write the corpus the Data tab shows; pyFlapjack is the client for the app's
+/// embedded Flapjack server, letting scripts upload measurements and request
+/// analyses against the Flapjack tab's installation. pyFlapjack is pinned to the
+/// fork that supports the pandas 2 stack loica needs (upstream pins pandas 1.5).
+const PYFLAPJACK_REQUIREMENT =
+  "pyflapjack @ git+https://github.com/marpaia/pyFlapjack.git";
+const REQUIRED_PACKAGES = [
+  LOICA_REQUIREMENT,
+  "plotly",
+  "sbol-db",
+  PYFLAPJACK_REQUIREMENT,
+];
+const REQUIRED_NAMES = ["loica", "plotly", "sbol-db", "pyflapjack"];
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -44,6 +54,24 @@ export async function getSbolServerUrl(): Promise<string | null> {
   }
   try {
     const info = await invoke<{ baseUrl: string }>("sbol_server_info");
+    return info.baseUrl;
+  } catch {
+    return null;
+  }
+}
+
+/// The loopback base URL of the app's embedded Flapjack API server, or `null`
+/// outside the desktop app (or if it could not start). Unlike the sbol-db
+/// server (in-process, always up), the Flapjack server is a Python process
+/// started on demand: `flapjack_server_ensure` creates its managed environment
+/// on first use and launches it, returning the URL. Passed into the generated
+/// LOICA script so it can construct a `pyFlapjack` client.
+export async function getFlapjackServerUrl(): Promise<string | null> {
+  if (!isTauriRuntime()) {
+    return null;
+  }
+  try {
+    const info = await invoke<{ baseUrl: string }>("flapjack_server_ensure");
     return info.baseUrl;
   } catch {
     return null;

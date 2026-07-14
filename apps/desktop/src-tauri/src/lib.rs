@@ -3,6 +3,7 @@ mod ai;
 mod backup;
 mod data;
 mod flapjack;
+mod flapjack_server;
 mod inspector;
 mod mcp;
 mod python;
@@ -24,6 +25,7 @@ pub fn run() {
         .manage(mcp::McpRegistry::default())
         .manage(backup::commands::BackupTaskState::default())
         .manage(secrets::KeychainSecretStore::default())
+        .manage(flapjack_server::FlapjackServer::default())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().map_err(std::io::Error::other)?;
@@ -85,6 +87,10 @@ pub fn run() {
                 let _ = backup::commands::run_close_backup_if_due(window.app_handle());
                 let registry = window.app_handle().state::<mcp::McpRegistry>();
                 tauri::async_runtime::block_on(registry.shutdown_all());
+                let flapjack_server = window
+                    .app_handle()
+                    .state::<flapjack_server::FlapjackServer>();
+                tauri::async_runtime::block_on(flapjack_server.shutdown());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -132,6 +138,8 @@ pub fn run() {
             data::commands::data_import,
             data::commands::data_import_many,
             sbol_server::commands::sbol_server_info,
+            flapjack_server::commands::flapjack_server_ensure,
+            flapjack_server::commands::flapjack_server_info,
             flapjack::commands::flapjack_overview,
             flapjack::commands::flapjack_studies_list,
             flapjack::commands::flapjack_study_get,

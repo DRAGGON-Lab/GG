@@ -274,6 +274,80 @@ where
     stream_command(command, on_line).await
 }
 
+/// A spawned, long-lived child process (an embedded server), whose stdout and stderr are drained
+/// line-by-line to a callback. The child is killed if this handle is dropped.
+pub struct ServerProcess {
+    child: tokio::process::Child,
+}
+
+impl ServerProcess {
+    /// Whether the process is still running (has not yet exited).
+    pub fn is_running(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(None))
+    }
+
+    /// Terminate the process and reap it.
+    pub async fn kill(&mut self) {
+        let _ = self.child.start_kill();
+        let _ = self.child.wait().await;
+    }
+}
+
+/// Spawn `python -m <module> <args>` with the given interpreter, streaming its stdout and stderr
+/// lines to `on_line`, and return a handle to the running process without waiting for it to exit.
+/// Runs with `PYTHONUNBUFFERED=1` so output surfaces line-by-line. Must be called from within a
+/// Tokio runtime (it spawns reader tasks). The child is killed if the returned handle is dropped.
+pub fn spawn_module<F>(
+    python: &Path,
+    module: &str,
+    args: &[String],
+    on_line: F,
+) -> Result<ServerProcess, String>
+where
+    F: Fn(OutputLine) + Send + Sync + 'static,
+{
+    let mut command = Command::new(python);
+    command
+        .arg("-m")
+        .arg(module)
+        .args(args)
+        .env("PYTHONUNBUFFERED", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("failed to spawn {module}: {error}"))?;
+
+    let on_line = std::sync::Arc::new(on_line);
+    if let Some(stdout) = child.stdout.take() {
+        let on_line = on_line.clone();
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                on_line(OutputLine {
+                    stream: Stream::Stdout,
+                    line,
+                });
+            }
+        });
+    }
+    if let Some(stderr) = child.stderr.take() {
+        let on_line = on_line.clone();
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                on_line(OutputLine {
+                    stream: Stream::Stderr,
+                    line,
+                });
+            }
+        });
+    }
+    Ok(ServerProcess { child })
+}
+
 /// A package installed in a workspace's `.venv`. `direct` is true when the
 /// package is declared in `pyproject.toml` (one the user added), as opposed to
 /// a transitive dependency pulled in to satisfy a direct one.

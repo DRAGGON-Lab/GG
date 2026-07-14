@@ -2,8 +2,9 @@
 //! mirroring the `flapjack-data` model (study → assay → sample → measurement
 //! plus the registry entities and characterization runs), a read-only SQL
 //! console over a second connection, and the typed read/write methods the
-//! commands wrap. Only this store writes the database; the Python analysis
-//! engine reads it read-only, so the database is opened in WAL mode.
+//! commands wrap. The embedded Flapjack API server (see `flapjack_server`) opens
+//! the same file and also writes it — measurements uploaded through pyFlapjack —
+//! so the database is opened in WAL mode, which serializes the two writers.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -151,8 +152,8 @@ pub struct FlapjackStore {
     /// A second pool opened read-only; the SQL workbench binds to it so ad-hoc
     /// SQL can never mutate the store, regardless of the statement.
     pub ro_pool: SqlitePool,
-    /// The database file path, handed to the Python analysis process (which
-    /// reads the same file) so it never has to reconstruct the app-data dir.
+    /// The database file path, handed to the embedded Flapjack API server (which
+    /// opens the same file) so it never has to reconstruct the app-data dir.
     pub db_path: String,
 }
 
