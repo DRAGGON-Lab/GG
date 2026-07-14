@@ -6,6 +6,7 @@ mod flapjack;
 mod inspector;
 mod mcp;
 mod python;
+mod sbol_server;
 mod secrets;
 mod settings;
 mod skills;
@@ -46,6 +47,13 @@ pub fn run() {
                 tauri::async_runtime::block_on(data::state::DataStore::open(&sbol_db_path))
                     .map_err(std::io::Error::other)?;
             app.manage(data_store);
+
+            // Serve the SBOL corpus over loopback HTTP so locally-run Python
+            // (the circuit's LOICA scripts) can reach it through the `sbol-db`
+            // client library, backed by the same database file as the Data tab.
+            let sbol_server = tauri::async_runtime::block_on(sbol_server::start(&sbol_db_path))
+                .map_err(std::io::Error::other)?;
+            app.manage(sbol_server);
 
             let flapjack_db_path = app_data_dir.join("flapjack.sqlite3");
             let flapjack_store = tauri::async_runtime::block_on(
@@ -123,6 +131,7 @@ pub fn run() {
             data::commands::data_schema_sql,
             data::commands::data_import,
             data::commands::data_import_many,
+            sbol_server::commands::sbol_server_info,
             flapjack::commands::flapjack_overview,
             flapjack::commands::flapjack_studies_list,
             flapjack::commands::flapjack_study_get,

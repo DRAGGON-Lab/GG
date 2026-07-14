@@ -45,6 +45,7 @@ import {
 } from "@/features/circuit/core/circuit-file";
 import {
   ensureCircuitEnv,
+  getSbolServerUrl,
   isTauriRuntime,
   runCircuitScript,
   type RunLine,
@@ -196,6 +197,9 @@ function CircuitWorkspace() {
   const [sbolExportIssueCount, setSbolExportIssueCount] = useState(0);
   const [sbolExportObjectCount, setSbolExportObjectCount] = useState(0);
   const [sbolExportReport, setSbolExportReport] = useState<string[]>([]);
+  // The embedded sbol-db server's loopback URL, resolved once. Passed into the
+  // generated script so it can pull SBOL parts from the corpus over HTTP.
+  const [sbolDbUrl, setSbolDbUrl] = useState<string | null>(null);
 
   const addCounterRef = useRef(0);
   const envRootRef = useRef<string | null>(null);
@@ -215,7 +219,22 @@ function CircuitWorkspace() {
     [nodes, edges, simulation],
   );
 
-  const generatedScript = useMemo(() => generateScript(document), [document]);
+  useEffect(() => {
+    let cancelled = false;
+    getSbolServerUrl().then((url) => {
+      if (!cancelled) {
+        setSbolDbUrl(url);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const generatedScript = useMemo(
+    () => generateScript(document, sbolDbUrl),
+    [document, sbolDbUrl],
+  );
 
   const dirty = useMemo(
     () => serializeDocument(document) !== savedSnapshot,
@@ -613,7 +632,7 @@ function CircuitWorkspace() {
       current: null,
     };
     try {
-      const script = buildSbolExportSource(document);
+      const script = buildSbolExportSource(document, sbolDbUrl);
       const result = await runCircuitScript(script, root, (line) => {
         if (line.stream === "display") {
           const bundle = parseDisplay(line.text);
@@ -665,6 +684,7 @@ function CircuitWorkspace() {
     filePath,
     openOutputPanel,
     running,
+    sbolDbUrl,
     sbolExportState,
   ]);
 

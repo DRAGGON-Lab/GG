@@ -200,16 +200,41 @@ export function nodeAssignment(
   return `${varName} = ${constructorCall(node, wiring, sbolCompArg)}`;
 }
 
-/// Build the network-construction portion of the script (imports through
-/// `GeneticNetwork` assembly), without the simulation harness.
-export function buildNetworkSource(document: CircuitDocument): string {
+/// The import block for a generated script. All imports live at the top of the
+/// file; `simulation` adds what the timecourse harness needs, `sbolDb` adds the
+/// client used to pull component definitions.
+function buildImports(options: {
+  sbolDb: boolean;
+  simulation: boolean;
+}): string[] {
+  const lines: string[] = [];
+  if (options.simulation) {
+    lines.push("import math", "import numpy as np");
+  }
+  lines.push("import sbol3");
+  if (options.simulation) {
+    lines.push("import plotly.graph_objects as go");
+  }
+  lines.push("from loica import *");
+  if (options.sbolDb) {
+    lines.push("from sbol_db import SbolDbClient");
+  }
+  lines.push("");
+  return lines;
+}
+
+/// Build the network-construction portion of the script (SBOL setup through
+/// `GeneticNetwork` assembly), without the simulation harness. The caller emits
+/// the import block; when `sbolDbUrl` is given the script constructs an
+/// `sbol-db` client bound to the app's embedded server and pulls real component
+/// definitions from it.
+export function buildNetworkSource(
+  document: CircuitDocument,
+  sbolDbUrl?: string | null,
+): string {
   const varById = assignVarNames(document);
   const lines: string[] = [
-    "import numpy as np",
-    "import sbol3",
-    "from loica import *",
-    "",
-    ...buildSbolSetupSource(document, varById),
+    ...buildSbolSetupSource(document, varById, sbolDbUrl),
   ];
 
   const species = document.nodes.filter((node) => !isOperator(node.kind));
@@ -260,6 +285,7 @@ export function buildNetworkSource(document: CircuitDocument): string {
 function buildSbolSetupSource(
   document: CircuitDocument,
   varById: Map<string, string>,
+  sbolDbUrl?: string | null,
 ): string[] {
   const lines: string[] = [
     "# --- SBOL components ---",
@@ -267,6 +293,7 @@ function buildSbolSetupSource(
     "sbol_doc = sbol3.Document()",
     "_gg_sbol_components = {}",
     "",
+    ...buildSbolClientSource(sbolDbUrl),
     "def _gg_sbol_role_uri(role):",
     "    mapping = {",
     "        'promoter': sbol3.SO_PROMOTER,",
@@ -302,11 +329,38 @@ function buildSbolSetupSource(
     "    _gg_sbol_components[identity] = comp",
     "    return comp",
     "",
+    "def _gg_pull_component(iri):",
+    "    # Pull a part's real SBOL3 definition (and its reference closure) from",
+    "    # the embedded sbol-db server into sbol_doc. Returns the Component, or",
+    "    # None to fall back to a locally-synthesized one.",
+    "    if sbol_db is None or not iri:",
+    "        return None",
+    "    existing = sbol_doc.find(iri)",
+    "    if existing is not None:",
+    "        return existing",
+    "    try:",
+    "        rdf = sbol_db.export_rdf(iri, format='rdfxml', version='sbol3', recursive=True)",
+    "        pulled = sbol3.Document()",
+    "        pulled.read_string(rdf, sbol3.RDF_XML)",
+    "        target = pulled.find(iri)",
+    "        if not isinstance(target, sbol3.Component):",
+    "            return None",
+    "        fresh = [obj for obj in pulled.objects if sbol_doc.find(str(obj.identity)) is None]",
+    "        if fresh:",
+    "            sbol3.copy(fresh, into_document=sbol_doc)",
+    "        return sbol_doc.find(iri)",
+    "    except Exception:",
+    "        return None",
+    "",
     "def _gg_node_sbol_comp(identity, name, node_kind, parts):",
     "    if not parts:",
     "        return _gg_sbol_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
     "    part_components = []",
     "    for part in parts:",
+    "        pulled = _gg_pull_component(part.get('iri'))",
+    "        if pulled is not None:",
+    "            part_components.append(pulled)",
+    "            continue",
     "        part_components.append(_gg_sbol_component(",
     "            part.get('iri') or part.get('display_id'),",
     "            part.get('name') or part.get('display_id'),",
@@ -338,6 +392,23 @@ function buildSbolSetupSource(
   }
   lines.push("");
   return lines;
+}
+
+/// The `sbol_db` client setup: an `SbolDbClient` bound to the app's embedded
+/// server when a URL is known, else `None`. Defining `sbol_db` unconditionally
+/// lets the pull helper — and any hand-written or AI-edited code — reference it
+/// safely; a missing server simply means the local synthesis path is used.
+/// `SbolDbClient` is imported in the top-level import block; construction opens
+/// no connection (it just holds the base URL), so this is a plain assignment.
+function buildSbolClientSource(sbolDbUrl?: string | null): string[] {
+  if (!sbolDbUrl) {
+    return ["# --- sbol-db client (unavailable) ---", "sbol_db = None", ""];
+  }
+  return [
+    "# --- sbol-db client ---",
+    `sbol_db = SbolDbClient(${pyLiteral(sbolDbUrl)})`,
+    "",
+  ];
 }
 
 function sbolVarName(varName: string): string {
@@ -384,7 +455,6 @@ export function buildSimulationSource(document: CircuitDocument): string {
   const lines: string[] = [
     "",
     "# --- simulation ---",
-    "import plotly.graph_objects as go",
     "",
     `metab = SimulatedMetabolism('sim', lambda t: gompertz(t, ${y0}, ${ymax}, ${um}, ${lag}), lambda t: gompertz_growth_rate(t, ${y0}, ${ymax}, ${um}, ${lag}))`,
   ];
@@ -470,7 +540,6 @@ export function buildSimulationSource(document: CircuitDocument): string {
   lines.push(
     "",
     "# --- flapjack manifest ---",
-    "import math as _math",
     "_signal_names = [str(_s) for _s in df.Signal.unique()]",
     "_signals = [{'name': _n, 'kind': 'biomass' if _n == 'Biomass' else 'fluorescence'} for _n in _signal_names]",
     "_sample_ids = list(dict.fromkeys(df.Sample.tolist()))",
@@ -481,7 +550,7 @@ export function buildSimulationSource(document: CircuitDocument): string {
     "    if _idx is None:",
     "        continue",
     "    _val = float(_row.Measurement)",
-    "    if _math.isnan(_val):",
+    "    if math.isnan(_val):",
     "        continue",
     "    _measurements.append({'sampleIndex': _idx, 'signal': str(_row.Signal), 'value': _val, 'time': float(_row.Time)})",
     "_manifest = {",
@@ -508,9 +577,13 @@ function round(value: number): number {
 
 /// Build a runnable script that converts the generated `GeneticNetwork` to SBOL,
 /// validates it, and emits RDF/XML plus the validation report as a MIME payload.
-export function buildSbolExportSource(document: CircuitDocument): string {
+export function buildSbolExportSource(
+  document: CircuitDocument,
+  sbolDbUrl?: string | null,
+): string {
   const lines = [
-    buildNetworkSource(document).trimEnd(),
+    ...buildImports({ sbolDb: Boolean(sbolDbUrl), simulation: false }),
+    buildNetworkSource(document, sbolDbUrl).trimEnd(),
     "",
     "# --- SBOL export ---",
     "sbol_export_doc = network.to_sbol(sbol_doc=sbol_doc)",
@@ -542,8 +615,15 @@ export function buildSbolExportSource(document: CircuitDocument): string {
 
 /// The complete runnable script: network construction followed by the
 /// simulation harness.
-export function generateScript(document: CircuitDocument): string {
-  return `${buildNetworkSource(document)}${buildSimulationSource(document)}`;
+export function generateScript(
+  document: CircuitDocument,
+  sbolDbUrl?: string | null,
+): string {
+  const imports = buildImports({
+    sbolDb: Boolean(sbolDbUrl),
+    simulation: true,
+  }).join("\n");
+  return `${imports}\n${buildNetworkSource(document, sbolDbUrl)}${buildSimulationSource(document)}`;
 }
 
 // --- Reverse parse: edit the code, sync params back ---

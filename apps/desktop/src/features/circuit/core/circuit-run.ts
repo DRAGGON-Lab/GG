@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { appLocalDataDir, join } from "@tauri-apps/api/path";
 import { mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
@@ -24,12 +25,29 @@ const LOICA_REQUIREMENT = "loica==1.0.7";
 const CIRCUIT_ENV_MARKER = "circuit-runtime-req.txt";
 
 /// Packages the managed environment needs for circuit simulation. Plotly backs
-/// the interactive reporter plot; loica is the simulation engine.
-const REQUIRED_PACKAGES = [LOICA_REQUIREMENT, "plotly"];
-const REQUIRED_NAMES = ["loica", "plotly"];
+/// the interactive reporter plot; loica is the simulation engine; sbol-db is
+/// the client for the app's embedded SBOL server, letting scripts read and
+/// write the corpus the Data tab shows.
+const REQUIRED_PACKAGES = [LOICA_REQUIREMENT, "plotly", "sbol-db"];
+const REQUIRED_NAMES = ["loica", "plotly", "sbol-db"];
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+/// The loopback base URL of the app's embedded sbol-db server, or `null`
+/// outside the desktop app (or if the server did not start). Passed into the
+/// generated LOICA script so it can construct an `sbol-db` client.
+export async function getSbolServerUrl(): Promise<string | null> {
+  if (!isTauriRuntime()) {
+    return null;
+  }
+  try {
+    const info = await invoke<{ baseUrl: string }>("sbol_server_info");
+    return info.baseUrl;
+  } catch {
+    return null;
+  }
 }
 
 let cachedRoot: string | null = null;
