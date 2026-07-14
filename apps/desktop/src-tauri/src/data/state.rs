@@ -5,6 +5,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
+use gg_data::sbol::SbolObjectStorage;
 use sbol_db_core::GraphId;
 use sbol_db_sparql::SparqlEngine;
 use sbol_db_sqlite::{connect_and_migrate, SqliteSqlConsole, SqliteStats, SqliteStore};
@@ -15,7 +16,7 @@ use sqlx::SqlitePool;
 /// managed state.
 pub struct DataStore {
     pub store: SqliteStore,
-    pub pool: SqlitePool,
+    pub objects: SbolObjectStorage,
     /// SQL console bound to a read-only connection so ad-hoc SQL can never
     /// mutate the corpus, regardless of the statement.
     pub sql_console: SqliteSqlConsole,
@@ -30,6 +31,7 @@ impl DataStore {
 
         let pool = connect_and_migrate(&url).await.map_err(|e| e.to_string())?;
         let store = SqliteStore::new(pool.clone());
+        let objects = SbolObjectStorage::open(db_path.to_path_buf())?;
         let sparql = SparqlEngine::new(store.triple_source());
         let stats = SqliteStats::new(pool.clone());
 
@@ -45,7 +47,7 @@ impl DataStore {
 
         Ok(Self {
             store,
-            pool,
+            objects,
             sql_console,
             stats,
             sparql,
@@ -74,47 +76,13 @@ impl DataStore {
         .await
         .map_err(|error| error.to_string())
     }
-
-    pub async fn graph_object_iris(
-        &self,
-        graph_id: GraphId,
-        sbol_class: Option<&str>,
-        role: Option<&str>,
-        after_iri: Option<&str>,
-        limit: u32,
-    ) -> Result<Vec<String>, String> {
-        sqlx::query_scalar(
-            r#"
-            SELECT DISTINCT o.iri
-            FROM sbol_objects o
-            JOIN sbol_triples t ON t.subject_iri = o.iri
-            JOIN sbol_graphs g ON g.iri = t.graph_iri
-            WHERE g.id = ?1
-              AND o.is_deleted = 0
-              AND (?2 IS NULL OR o.sbol_class = ?2)
-              AND (?3 IS NULL OR EXISTS (
-                SELECT 1 FROM json_each(o.roles) WHERE value = ?3
-              ))
-              AND (?4 IS NULL OR o.iri > ?4)
-            ORDER BY o.iri ASC
-            LIMIT ?5
-            "#,
-        )
-        .bind(graph_id.0.to_string())
-        .bind(sbol_class)
-        .bind(role)
-        .bind(after_iri)
-        .bind(i64::from(limit))
-        .fetch_all(self.store.pool())
-        .await
-        .map_err(|error| error.to_string())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use gg_data::sbol::SbolObjectSearch;
     use sbol_db_core::SerializationFormat;
     use sbol_db_sparql::SparqlOptions;
     use sbol_db_storage::{DbStats, ImportInput, LabStore, SqlConsole, SqlExecuteRequest};
@@ -246,12 +214,49 @@ mod tests {
         assert_eq!(data.graph_object_count(first.graph_id).await.unwrap(), 2);
         assert_eq!(data.graph_object_count(second.graph_id).await.unwrap(), 2);
 
-        let object_iris = data
-            .graph_object_iris(first.graph_id, None, None, None, 100)
-            .await
+        for graph_id in [first.graph_id, second.graph_id] {
+            let graph_id = graph_id.0.to_string();
+            let search = SbolObjectSearch {
+                sbol_class: None,
+                role: None,
+                graph_id: Some(&graph_id),
+                iri_query: None,
+                after_iri: None,
+                limit: 100,
+            };
+            let objects = data.objects.list(search).unwrap();
+            assert_eq!(objects.len(), 2);
+            assert!(objects.iter().any(|object| {
+                object.iri == "https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR"
+            }));
+
+            // IRI filtering applies before the page limit and remains scoped to
+            // either imported graph, even though the index holds one global row.
+            let matching = data
+                .objects
+                .list(SbolObjectSearch {
+                    sbol_class: None,
+                    role: None,
+                    graph_id: Some(&graph_id),
+                    iri_query: Some("_SEQUENCE"),
+                    after_iri: Some(&objects[0].iri),
+                    limit: 1,
+                })
+                .unwrap();
+            assert_eq!(matching.len(), 1);
+            assert_eq!(matching[0].iri, objects[1].iri);
+        }
+        let absent_graph = data
+            .objects
+            .list(SbolObjectSearch {
+                sbol_class: None,
+                role: None,
+                graph_id: Some("00000000-0000-0000-0000-000000000000"),
+                iri_query: Some("_sequence"),
+                after_iri: None,
+                limit: 100,
+            })
             .unwrap();
-        assert!(object_iris
-            .iter()
-            .any(|iri| { iri == "https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR" }));
+        assert!(absent_graph.is_empty());
     }
 }
