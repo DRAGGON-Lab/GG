@@ -34,11 +34,12 @@ const VENV_SUBDIR: &str = "flapjack-server";
 const REQUIREMENT_MARKER: &str = "flapjack-server-req.txt";
 
 /// Environment variable overriding where `flapjack-data` is installed from. Defaults to the git
-/// repository, installed with the `api` and `analysis` extras. Set this to a local path
-/// (`flapjack-data[api,analysis] @ file:///path`) or a PyPI requirement to install from elsewhere.
+/// repository with the `api` (FastAPI/uvicorn/JWT), `analysis` (numpy/scipy/pandas), and `sqlite`
+/// (SQLAlchemy) extras — the SQLite-backed API server needs all three. Set this to a local path
+/// (`flapjack-data[api,analysis,sqlite] @ file:///path`) or a PyPI requirement to install elsewhere.
 const SOURCE_ENV: &str = "GG_FLAPJACK_DATA_SOURCE";
 const DEFAULT_SOURCE: &str =
-    "flapjack-data[api,analysis] @ git+https://github.com/marpaia/flapjack-data.git";
+    "flapjack-data[api,analysis,sqlite] @ git+https://github.com/marpaia/flapjack-data.git";
 
 fn requirement() -> String {
     std::env::var(SOURCE_ENV).unwrap_or_else(|_| DEFAULT_SOURCE.to_string())

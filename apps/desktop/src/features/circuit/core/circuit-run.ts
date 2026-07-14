@@ -73,7 +73,11 @@ export async function getFlapjackServerUrl(): Promise<string | null> {
   try {
     const info = await invoke<{ baseUrl: string }>("flapjack_server_ensure");
     return info.baseUrl;
-  } catch {
+  } catch (error) {
+    // Surface the reason (missing command in an un-rebuilt binary, a failed
+    // environment build, a health-check timeout) rather than hiding it behind a
+    // silent `flapjack = None` in the generated script.
+    console.error("Flapjack server unavailable:", error);
     return null;
   }
 }

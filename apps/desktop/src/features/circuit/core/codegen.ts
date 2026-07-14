@@ -200,49 +200,297 @@ export function nodeAssignment(
   return `${varName} = ${constructorCall(node, wiring, sbolCompArg)}`;
 }
 
-/// The import block for a generated script. All imports live at the top of the
-/// file; `simulation` adds what the timecourse harness needs, `sbolDb` adds the
-/// client used to pull component definitions.
+// --- Script assembly ---------------------------------------------------------
+//
+// A generated script reads top to bottom like a hand-written file: imports, the
+// embedded-service clients and SBOL document state, the reusable helper
+// functions, then the body — SBOL components, the circuit, and (for a run) the
+// simulation and its Flapjack export. Each builder below emits one of those
+// sections; `generateScript` and `buildSbolExportSource` compose them.
+
+const SBOL_NAMESPACE = "https://gg.draggonlab.org/circuit";
+
+/// The import block, grouped and ordered like isort: the standard library
+/// first, then third-party. `simulation` pulls in the numeric and plotting
+/// stack; `sbolDb`/`flapjack` add the clients the body constructs.
 function buildImports(options: {
   sbolDb: boolean;
   flapjack: boolean;
   simulation: boolean;
 }): string[] {
-  const lines: string[] = [];
+  const stdlib = options.simulation ? ["import math"] : [];
+  const thirdParty = ["import sbol3"];
   if (options.simulation) {
-    lines.push("import math", "import numpy as np");
-  }
-  lines.push("import sbol3");
-  if (options.simulation) {
-    lines.push("import plotly.graph_objects as go");
-  }
-  lines.push("from loica import *");
-  if (options.sbolDb) {
-    lines.push("from sbol_db import SbolDbClient");
+    thirdParty.unshift(
+      "import numpy as np",
+      "import plotly.graph_objects as go",
+    );
   }
   if (options.flapjack) {
-    lines.push("from flapjack import Flapjack");
+    thirdParty.push("from flapjack import Flapjack");
   }
-  lines.push("");
+  thirdParty.push("from loica import *");
+  if (options.sbolDb) {
+    thirdParty.push("from sbol_db import SbolDbClient");
+  }
+  return [...stdlib, ...(stdlib.length ? [""] : []), ...thirdParty, ""];
+}
+
+/// The embedded-service clients and the SBOL document they populate, defined
+/// before the helper functions that close over them. Each client is `None` when
+/// its server isn't running, and the helpers degrade to local synthesis.
+function buildClients(
+  sbolDbUrl: string | null | undefined,
+  flapjackUrl: string | null | undefined,
+  options: { flapjack: boolean },
+): string[] {
+  const lines = ["# Embedded service clients (None when the server is down)."];
+  lines.push(
+    sbolDbUrl
+      ? `sbol_db = SbolDbClient(${pyLiteral(sbolDbUrl)})`
+      : "sbol_db = None",
+  );
+  if (options.flapjack) {
+    if (flapjackUrl) {
+      const host = flapjackUrl.replace(/^https?:\/\//, "");
+      lines.push(
+        `flapjack = Flapjack(${pyLiteral(host)})`,
+        "flapjack.log_in('gg', 'gg')",
+      );
+    } else {
+      lines.push("flapjack = None");
+    }
+  }
+  lines.push(
+    "",
+    `sbol3.set_namespace(${pyLiteral(SBOL_NAMESPACE)})`,
+    "sbol_doc = sbol3.Document()",
+    "sbol_component_cache = {}",
+  );
   return lines;
 }
 
-/// Build the network-construction portion of the script (SBOL setup through
-/// `GeneticNetwork` assembly), without the simulation harness. The caller emits
-/// the import block; when `sbolDbUrl` is given the script constructs an
-/// `sbol-db` client bound to the app's embedded server and pulls real component
-/// definitions from it.
-export function buildNetworkSource(
-  document: CircuitDocument,
-  sbolDbUrl?: string | null,
-): string {
-  const varById = assignVarNames(document);
-  const lines: string[] = [
-    ...buildSbolSetupSource(document, varById, sbolDbUrl),
+/// The SBOL helper functions, shared by the run and export scripts. They read
+/// the module-level `sbol_db`/`sbol_doc`/`sbol_component_cache` defined above.
+function buildSbolHelpers(): string[] {
+  return [
+    "def role_uri(role):",
+    '    """The SBOL sequence-ontology URI for a genetic-part role, or None."""',
+    "    return {",
+    "        'promoter': sbol3.SO_PROMOTER,",
+    "        'rbs': sbol3.SO_RBS,",
+    "        'cds': sbol3.SO_CDS,",
+    "        'terminator': sbol3.SO_TERMINATOR,",
+    "        'engineered region': sbol3.SO_ENGINEERED_REGION,",
+    "        'stability': sbol3.SO_CDS,",
+    "    }.get(role)",
+    "",
+    "",
+    "def type_uri(node_kind, role):",
+    '    """The SBOL component type URI for a node kind and molecular role."""',
+    "    if node_kind == 'supplement':",
+    "        return sbol3.SBO_SIMPLE_CHEMICAL",
+    "    if role == 'rna':",
+    "        return sbol3.SBO_RNA",
+    "    if role == 'protein':",
+    "        return sbol3.SBO_PROTEIN",
+    "    return sbol3.SBO_DNA",
+    "",
+    "",
+    "def synthesize_component(identity, name, node_kind, role, roles):",
+    '    """A locally-built SBOL Component, created once per identity and cached."""',
+    "    if identity in sbol_component_cache:",
+    "        return sbol_component_cache[identity]",
+    "    values = []",
+    "    for value in roles or []:",
+    "        if value and value not in values:",
+    "            values.append(value)",
+    "    inferred = role_uri(role)",
+    "    if inferred and inferred not in values:",
+    "        values.append(inferred)",
+    "    component = sbol3.Component(identity, type_uri(node_kind, role), roles=values or None, name=name)",
+    "    sbol_doc.add(component)",
+    "    sbol_component_cache[identity] = component",
+    "    return component",
+    "",
+    "",
+    "def pull_component(iri):",
+    '    """Fetch a part\'s real SBOL3 definition and its reference closure from the',
+    "    embedded sbol-db server into sbol_doc. Returns the Component, or None to",
+    '    fall back to local synthesis when the server or part is unavailable."""',
+    "    if sbol_db is None or not iri:",
+    "        return None",
+    "    existing = sbol_doc.find(iri)",
+    "    if existing is not None:",
+    "        return existing",
+    "    try:",
+    "        rdf = sbol_db.export_rdf(iri, format='rdfxml', version='sbol3', recursive=True)",
+    "        pulled = sbol3.Document()",
+    "        pulled.read_string(rdf, sbol3.RDF_XML)",
+    "        if not isinstance(pulled.find(iri), sbol3.Component):",
+    "            return None",
+    "        fresh = [obj for obj in pulled.objects if sbol_doc.find(str(obj.identity)) is None]",
+    "        if fresh:",
+    "            sbol3.copy(fresh, into_document=sbol_doc)",
+    "        return sbol_doc.find(iri)",
+    "    except Exception:",
+    "        return None",
+    "",
+    "",
+    "def node_component(identity, name, node_kind, parts):",
+    '    """The SBOL Component for a circuit node: each part pulled from sbol-db when',
+    '    available (else synthesized), assembled into a composite for multi-part nodes."""',
+    "    if not parts:",
+    "        return synthesize_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
+    "    components = []",
+    "    for part in parts:",
+    "        pulled = pull_component(part.get('iri'))",
+    "        if pulled is not None:",
+    "            components.append(pulled)",
+    "            continue",
+    "        components.append(synthesize_component(",
+    "            part.get('iri') or part.get('display_id'),",
+    "            part.get('name') or part.get('display_id'),",
+    "            node_kind,",
+    "            part.get('role'),",
+    "            part.get('roles') or [],",
+    "        ))",
+    "    if len(components) == 1:",
+    "        return components[0]",
+    "    composite = synthesize_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
+    "    composite.features = [sbol3.SubComponent(part) for part in components]",
+    "    composite.constraints = [",
+    "        sbol3.Constraint(sbol3.SBOL_PRECEDES, composite.features[i], composite.features[i + 1])",
+    "        for i in range(len(composite.features) - 1)",
+    "    ]",
+    "    return composite",
   ];
+}
 
+/// The reporter-timecourse plotting function, used by the run script.
+function buildPlotHelper(): string[] {
+  return [
+    "def plot_reporter_timecourse(df):",
+    '    """Display an interactive Plotly timecourse, one line per (sample, reporter)."""',
+    "    signals = df[df.Signal != 'Biomass']",
+    "    if not len(signals):",
+    "        return",
+    "    fig = go.Figure()",
+    "    labeled = set()",
+    "    for (sample_id, signal), group in signals.groupby(['Sample', 'Signal']):",
+    "        color = group.HexColor.dropna().iloc[0] if 'HexColor' in group and group.HexColor.notna().any() else None",
+    "        fig.add_trace(go.Scatter(",
+    "            x=group.Time,",
+    "            y=group.Measurement,",
+    "            mode='lines+markers',",
+    "            name=signal,",
+    "            legendgroup=signal,",
+    "            showlegend=signal not in labeled,",
+    "            line=dict(color=color, width=1.8),",
+    "            marker=dict(size=4),",
+    "            customdata=np.stack([group.Sample, group.Signal], axis=-1),",
+    "            hovertemplate='Time: %{x:.3g} h<br>Measurement: %{y:.3g}<br>Sample: %{customdata[0]}<br>Signal: %{customdata[1]}<extra></extra>',",
+    "        ))",
+    "        labeled.add(signal)",
+    "    fig.update_layout(",
+    "        title='Reporter timecourse (one line per sample)',",
+    "        template='plotly_white',",
+    "        height=420,",
+    "        margin=dict(l=52, r=24, t=56, b=48),",
+    "        paper_bgcolor='white',",
+    "        plot_bgcolor='white',",
+    "        font=dict(family='Inter, system-ui, sans-serif', size=12, color='#24313d'),",
+    "        hovermode='closest',",
+    "        legend=dict(title='Reporter', orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),",
+    "        xaxis=dict(title='Time (h)', showgrid=True, gridcolor='#e5e7eb', zeroline=False, rangeslider=dict(visible=True)),",
+    "        yaxis=dict(title='Reporter signal', showgrid=True, gridcolor='#e5e7eb', zeroline=False),",
+    "    )",
+    "    fig.update_xaxes(showspikes=True, spikemode='across', spikesnap='cursor', spikedash='dot', spikecolor='#64748b')",
+    "    fig.update_yaxes(showspikes=True, spikemode='across', spikesnap='cursor', spikedash='dot', spikecolor='#64748b')",
+    "    display({'text/html': fig.to_html(include_plotlyjs='cdn', full_html=False, config={'responsive': True, 'displaylogo': False, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape'], 'toImageButtonOptions': {'format': 'png', 'filename': 'reporter-timecourse'}})})",
+  ];
+}
+
+/// The Flapjack manifest builder and its rich-display wrapper. The Flapjack tab
+/// captures the emitted MIME bundle and imports the study; the circuit Output
+/// panel ignores it.
+function buildFlapjackHelper(): string[] {
+  return [
+    "class FlapjackManifest:",
+    '    """A rich-display wrapper the Flapjack tab imports via its MIME type."""',
+    "",
+    "    MIME = 'application/vnd.gg.flapjack+json'",
+    "",
+    "    def __init__(self, payload):",
+    "        self.payload = payload",
+    "",
+    "    def _repr_mimebundle_(self, include=None, exclude=None):",
+    "        return {self.MIME: self.payload}",
+    "",
+    "",
+    "def flapjack_manifest(df, sample_meta, study_name):",
+    '    """Package the simulated run as a Flapjack import manifest.',
+    "",
+    "    Measurements map to samples by first-seen order in the DataFrame, which",
+    '    matches sample-creation order."""',
+    "    signal_names = [str(signal) for signal in df.Signal.unique()]",
+    "    signals = [",
+    "        {'name': name, 'kind': 'biomass' if name == 'Biomass' else 'fluorescence'}",
+    "        for name in signal_names",
+    "    ]",
+    "    sample_ids = list(dict.fromkeys(df.Sample.tolist()))",
+    "    index_by_sample = {sid: i for i, sid in enumerate(sample_ids) if i < len(sample_meta)}",
+    "    measurements = []",
+    "    for row in df.itertuples(index=False):",
+    "        index = index_by_sample.get(row.Sample)",
+    "        if index is None:",
+    "            continue",
+    "        value = float(row.Measurement)",
+    "        if math.isnan(value):",
+    "            continue",
+    "        measurements.append({'sampleIndex': index, 'signal': str(row.Signal), 'value': value, 'time': float(row.Time)})",
+    "    return FlapjackManifest({",
+    "        'study': {'name': study_name, 'description': 'Simulated with LOICA'},",
+    "        'assay': {'name': 'simulation', 'machine': 'LOICA', 'temperature': 0.0},",
+    "        'signals': signals,",
+    "        'samples': sample_meta,",
+    "        'measurements': measurements,",
+    "    })",
+  ];
+}
+
+/// The per-node SBOL component assignments, e.g.
+/// `GFP_sbol = node_component('gg_reporter_ex_gfp', 'GFP', 'reporter', [...])`.
+function buildSbolComponents(
+  document: CircuitDocument,
+  varById: Map<string, string>,
+): string[] {
+  const lines = ["# --- SBOL components ---"];
+  for (const node of document.nodes) {
+    const varName = varById.get(node.id);
+    if (!varName) {
+      continue;
+    }
+    lines.push(
+      `${sbolVarName(varName)} = node_component(${pyLiteral(
+        sbolNodeIdentity(node),
+      )}, ${pyLiteral(node.name)}, ${pyLiteral(node.kind)}, ${pyDataLiteral(
+        sbolCompMetadata(node)?.parts ?? [],
+      )})`,
+    );
+  }
+  return lines;
+}
+
+/// The circuit itself: species, then edge-wired operators, assembled into a
+/// `GeneticNetwork`. Each node carries the SBOL component built above.
+function buildCircuit(
+  document: CircuitDocument,
+  varById: Map<string, string>,
+): string[] {
   const species = document.nodes.filter((node) => !isOperator(node.kind));
   const operators = document.nodes.filter((node) => isOperator(node.kind));
+  const lines: string[] = [];
 
   if (species.length > 0) {
     lines.push("# --- species ---");
@@ -283,155 +531,7 @@ export function buildNetworkSource(
     lines.push(`network.add_operator([${operatorVars.join(", ")}])`);
   }
 
-  return `${lines.join("\n")}\n`;
-}
-
-function buildSbolSetupSource(
-  document: CircuitDocument,
-  varById: Map<string, string>,
-  sbolDbUrl?: string | null,
-): string[] {
-  const lines: string[] = [
-    "# --- SBOL components ---",
-    "sbol3.set_namespace('https://gg.draggonlab.org/circuit')",
-    "sbol_doc = sbol3.Document()",
-    "_gg_sbol_components = {}",
-    "",
-    ...buildSbolClientSource(sbolDbUrl),
-    "def _gg_sbol_role_uri(role):",
-    "    mapping = {",
-    "        'promoter': sbol3.SO_PROMOTER,",
-    "        'rbs': sbol3.SO_RBS,",
-    "        'cds': sbol3.SO_CDS,",
-    "        'terminator': sbol3.SO_TERMINATOR,",
-    "        'engineered region': sbol3.SO_ENGINEERED_REGION,",
-    "        'stability': sbol3.SO_CDS,",
-    "    }",
-    "    return mapping.get(role)",
-    "",
-    "def _gg_sbol_type_uri(node_kind, role):",
-    "    if node_kind == 'supplement':",
-    "        return sbol3.SBO_SIMPLE_CHEMICAL",
-    "    if role == 'rna':",
-    "        return sbol3.SBO_RNA",
-    "    if role == 'protein':",
-    "        return sbol3.SBO_PROTEIN",
-    "    return sbol3.SBO_DNA",
-    "",
-    "def _gg_sbol_component(identity, name, node_kind, role, roles):",
-    "    if identity in _gg_sbol_components:",
-    "        return _gg_sbol_components[identity]",
-    "    role_values = []",
-    "    for value in roles or []:",
-    "        if value and value not in role_values:",
-    "            role_values.append(value)",
-    "    role_uri = _gg_sbol_role_uri(role)",
-    "    if role_uri and role_uri not in role_values:",
-    "        role_values.append(role_uri)",
-    "    comp = sbol3.Component(identity, _gg_sbol_type_uri(node_kind, role), roles=role_values or None, name=name)",
-    "    sbol_doc.add(comp)",
-    "    _gg_sbol_components[identity] = comp",
-    "    return comp",
-    "",
-    "def _gg_pull_component(iri):",
-    "    # Pull a part's real SBOL3 definition (and its reference closure) from",
-    "    # the embedded sbol-db server into sbol_doc. Returns the Component, or",
-    "    # None to fall back to a locally-synthesized one.",
-    "    if sbol_db is None or not iri:",
-    "        return None",
-    "    existing = sbol_doc.find(iri)",
-    "    if existing is not None:",
-    "        return existing",
-    "    try:",
-    "        rdf = sbol_db.export_rdf(iri, format='rdfxml', version='sbol3', recursive=True)",
-    "        pulled = sbol3.Document()",
-    "        pulled.read_string(rdf, sbol3.RDF_XML)",
-    "        target = pulled.find(iri)",
-    "        if not isinstance(target, sbol3.Component):",
-    "            return None",
-    "        fresh = [obj for obj in pulled.objects if sbol_doc.find(str(obj.identity)) is None]",
-    "        if fresh:",
-    "            sbol3.copy(fresh, into_document=sbol_doc)",
-    "        return sbol_doc.find(iri)",
-    "    except Exception:",
-    "        return None",
-    "",
-    "def _gg_node_sbol_comp(identity, name, node_kind, parts):",
-    "    if not parts:",
-    "        return _gg_sbol_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
-    "    part_components = []",
-    "    for part in parts:",
-    "        pulled = _gg_pull_component(part.get('iri'))",
-    "        if pulled is not None:",
-    "            part_components.append(pulled)",
-    "            continue",
-    "        part_components.append(_gg_sbol_component(",
-    "            part.get('iri') or part.get('display_id'),",
-    "            part.get('name') or part.get('display_id'),",
-    "            node_kind,",
-    "            part.get('role'),",
-    "            part.get('roles') or [],",
-    "        ))",
-    "    if len(part_components) == 1:",
-    "        return part_components[0]",
-    "    comp = _gg_sbol_component(identity, name, node_kind, 'engineered region', [sbol3.SO_ENGINEERED_REGION])",
-    "    comp.features = [sbol3.SubComponent(part) for part in part_components]",
-    "    comp.constraints = [sbol3.Constraint(sbol3.SBOL_PRECEDES, comp.features[i], comp.features[i + 1]) for i in range(len(comp.features) - 1)]",
-    "    return comp",
-    "",
-  ];
-
-  for (const node of document.nodes) {
-    const varName = varById.get(node.id);
-    if (!varName) {
-      continue;
-    }
-    lines.push(
-      `${sbolVarName(varName)} = _gg_node_sbol_comp(${pyLiteral(
-        sbolNodeIdentity(node),
-      )}, ${pyLiteral(node.name)}, ${pyLiteral(node.kind)}, ${pyDataLiteral(
-        sbolCompMetadata(node)?.parts ?? [],
-      )})`,
-    );
-  }
-  lines.push("");
   return lines;
-}
-
-/// The `sbol_db` client setup: an `SbolDbClient` bound to the app's embedded
-/// server when a URL is known, else `None`. Defining `sbol_db` unconditionally
-/// lets the pull helper — and any hand-written or AI-edited code — reference it
-/// safely; a missing server simply means the local synthesis path is used.
-/// `SbolDbClient` is imported in the top-level import block; construction opens
-/// no connection (it just holds the base URL), so this is a plain assignment.
-function buildSbolClientSource(sbolDbUrl?: string | null): string[] {
-  if (!sbolDbUrl) {
-    return ["# --- sbol-db client (unavailable) ---", "sbol_db = None", ""];
-  }
-  return [
-    "# --- sbol-db client ---",
-    `sbol_db = SbolDbClient(${pyLiteral(sbolDbUrl)})`,
-    "",
-  ];
-}
-
-/// The `flapjack` client block. When the embedded Flapjack API server is running
-/// its loopback URL is passed here; the script binds a pre-authenticated
-/// `pyFlapjack` client to it (the server accepts any local credentials), so the
-/// circuit can upload measurements and request analyses against the same
-/// Flapjack installation the Flapjack tab shows. `flapjack` is `None` when the
-/// server is unavailable.
-function buildFlapjackClientSource(flapjackUrl?: string | null): string[] {
-  if (!flapjackUrl) {
-    return ["# --- flapjack client (unavailable) ---", "flapjack = None", ""];
-  }
-  const urlBase = flapjackUrl.replace(/^https?:\/\//, "");
-  return [
-    "# --- flapjack client ---",
-    `flapjack = Flapjack(${pyLiteral(urlBase)})`,
-    "flapjack.log_in('gg', 'gg')",
-    "",
-  ];
 }
 
 function sbolVarName(varName: string): string {
@@ -442,13 +542,18 @@ function sbolNodeIdentity(node: CircuitNode): string {
   return `gg_${node.kind}_${node.id.replace(/[^A-Za-z0-9_]/g, "_")}`;
 }
 
-/// Build the simulation harness: a Gompertz metabolism, one sample per point of
+function round(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+/// The dose-response simulation: a Gompertz metabolism, one sample per point of
 /// a log-spaced dose sweep over the first supplement (or a single baseline
-/// sample when the circuit has no supplement), an `Assay`, and rich output — the
-/// measurements DataFrame plus an interactive reporter timecourse figure. Both
-/// render in the Output panel via the runner's rich `display()` protocol.
-export function buildSimulationSource(document: CircuitDocument): string {
-  const varById = assignVarNames(document);
+/// sample), an `Assay`, and rich output — the measurements DataFrame, the
+/// reporter timecourse, and the Flapjack manifest.
+function buildSimulationBody(
+  document: CircuitDocument,
+  varById: Map<string, string>,
+): string[] {
   const sim = document.simulation;
   const [y0, ymax, um, lag] = sim.biomass;
 
@@ -459,26 +564,21 @@ export function buildSimulationSource(document: CircuitDocument): string {
     ? varById.get(supplements[0].id)
     : null;
 
-  // Registry metadata for the Flapjack manifest. Reporters name the vector
-  // (a construct) and the study; the first supplement is the dose-response
-  // analyte. Embedded as JSON so they are valid Python string literals.
   const reporterNames = document.nodes
     .filter((node) => node.kind === "reporter")
     .map((node) => node.name);
-  const studyLit = JSON.stringify(
+  const studyLit = pyLiteral(
     reporterNames.length
       ? `Circuit: ${reporterNames.join(", ")}`
       : "Circuit simulation",
   );
-  const vectorLit = JSON.stringify(
+  const vectorLit = pyLiteral(
     reporterNames.length ? reporterNames.join("+") : "circuit",
   );
-  const supplementLit = JSON.stringify(supplements[0]?.name ?? "inducer");
+  const supplementLit = pyLiteral(supplements[0]?.name ?? "inducer");
 
   const lines: string[] = [
-    "",
     "# --- simulation ---",
-    "",
     `metab = SimulatedMetabolism('sim', lambda t: gompertz(t, ${y0}, ${ymax}, ${um}, ${lag}), lambda t: gompertz_growth_rate(t, ${y0}, ${ymax}, ${um}, ${lag}))`,
   ];
 
@@ -489,11 +589,11 @@ export function buildSimulationSource(document: CircuitDocument): string {
       `doses = np.append(0, np.logspace(${round(lo)}, ${round(hi)}, ${sim.dosePoints}))`,
       "samples = []",
       "sample_meta = []",
-      "for _i, conc in enumerate(doses):",
+      "for i, conc in enumerate(doses):",
       "    sample = Sample(genetic_network=network, metabolism=metab, media='M9', strain='E. coli')",
       `    sample.set_supplement(${firstSupplement}, conc)`,
       "    samples.append(sample)",
-      `    sample_meta.append({'row': 0, 'col': _i, 'media': 'M9', 'strain': 'E. coli', 'vector': ${vectorLit}, 'supplements': [{'chemical': ${supplementLit}, 'concentration': float(conc)}]})`,
+      `    sample_meta.append({'row': 0, 'col': i, 'media': 'M9', 'strain': 'E. coli', 'vector': ${vectorLit}, 'supplements': [{'chemical': ${supplementLit}, 'concentration': float(conc)}]})`,
     );
   } else {
     lines.push(
@@ -513,105 +613,76 @@ export function buildSimulationSource(document: CircuitDocument): string {
     `assay = Assay(samples, n_measurements=${sim.nMeasurements}, interval=${sim.interval}, biomass_signal_id='od')`,
     `assay.run(${runArgs})`,
     "df = assay.measurements",
-    "_reporter_hexcolors = {reporter.name: reporter.color for sample in samples for reporter in sample.reporters}",
-    "df['HexColor'] = df['Signal'].map(_reporter_hexcolors)",
+    "reporter_colors = {reporter.name: reporter.color for sample in samples for reporter in sample.reporters}",
+    "df['HexColor'] = df['Signal'].map(reporter_colors)",
+    "",
     "display(df)",
-    "",
-    "signals = df[df.Signal != 'Biomass']",
-    "if len(signals):",
-    "    fig = go.Figure()",
-    "    labeled_signals = set()",
-    "    for (sample_id, signal), group in signals.groupby(['Sample', 'Signal']):",
-    "        label = signal",
-    "        hexcolor = group.HexColor.dropna().iloc[0] if 'HexColor' in group and group.HexColor.notna().any() else None",
-    "        show_legend = signal not in labeled_signals",
-    "        fig.add_trace(go.Scatter(",
-    "            x=group.Time,",
-    "            y=group.Measurement,",
-    "            mode='lines+markers',",
-    "            name=label,",
-    "            legendgroup=signal,",
-    "            showlegend=show_legend,",
-    "            line=dict(color=hexcolor, width=1.8),",
-    "            marker=dict(size=4),",
-    "            customdata=np.stack([group.Sample, group.Signal], axis=-1),",
-    "            hovertemplate='Time: %{x:.3g} h<br>Measurement: %{y:.3g}<br>Sample: %{customdata[0]}<br>Signal: %{customdata[1]}<extra></extra>',",
-    "        ))",
-    "        labeled_signals.add(signal)",
-    "    fig.update_layout(",
-    "        title='Reporter timecourse (one line per sample)',",
-    "        template='plotly_white',",
-    "        height=420,",
-    "        margin=dict(l=52, r=24, t=56, b=48),",
-    "        paper_bgcolor='white',",
-    "        plot_bgcolor='white',",
-    "        font=dict(family='Inter, system-ui, sans-serif', size=12, color='#24313d'),",
-    "        hovermode='closest',",
-    "        legend=dict(title='Reporter', orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),",
-    "        xaxis=dict(title='Time (h)', showgrid=True, gridcolor='#e5e7eb', zeroline=False, rangeslider=dict(visible=True)),",
-    "        yaxis=dict(title='Reporter signal', showgrid=True, gridcolor='#e5e7eb', zeroline=False),",
-    "    )",
-    "    fig.update_xaxes(showspikes=True, spikemode='across', spikesnap='cursor', spikedash='dot', spikecolor='#64748b')",
-    "    fig.update_yaxes(showspikes=True, spikemode='across', spikesnap='cursor', spikedash='dot', spikecolor='#64748b')",
-    "    display({'text/html': fig.to_html(include_plotlyjs='cdn', full_html=False, config={'responsive': True, 'displaylogo': False, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape'], 'toImageButtonOptions': {'format': 'png', 'filename': 'reporter-timecourse'}})})",
+    "plot_reporter_timecourse(df)",
+    `display(flapjack_manifest(df, sample_meta, ${studyLit}))`,
   );
 
-  // Emit the experiment as a Flapjack manifest under a custom MIME type. The
-  // Flapjack tab captures it (the circuit Output panel ignores this MIME) and
-  // imports the whole study on demand. Measurements map back to samples by
-  // first-seen order in the DataFrame, which matches sample creation order.
-  lines.push(
-    "",
-    "# --- flapjack manifest ---",
-    "_signal_names = [str(_s) for _s in df.Signal.unique()]",
-    "_signals = [{'name': _n, 'kind': 'biomass' if _n == 'Biomass' else 'fluorescence'} for _n in _signal_names]",
-    "_sample_ids = list(dict.fromkeys(df.Sample.tolist()))",
-    "_id_to_index = {_sid: _i for _i, _sid in enumerate(_sample_ids) if _i < len(sample_meta)}",
-    "_measurements = []",
-    "for _row in df.itertuples(index=False):",
-    "    _idx = _id_to_index.get(_row.Sample)",
-    "    if _idx is None:",
-    "        continue",
-    "    _val = float(_row.Measurement)",
-    "    if math.isnan(_val):",
-    "        continue",
-    "    _measurements.append({'sampleIndex': _idx, 'signal': str(_row.Signal), 'value': _val, 'time': float(_row.Time)})",
-    "_manifest = {",
-    `    'study': {'name': ${studyLit}, 'description': 'Simulated with LOICA'},`,
-    "    'assay': {'name': 'simulation', 'machine': 'LOICA', 'temperature': 0.0},",
-    "    'signals': _signals,",
-    "    'samples': sample_meta,",
-    "    'measurements': _measurements,",
-    "}",
-    "class _FlapjackManifest:",
-    "    def __init__(self, payload):",
-    "        self._payload = payload",
-    "    def _repr_mimebundle_(self, include=None, exclude=None):",
-    "        return {'application/vnd.gg.flapjack+json': self._payload}",
-    "display(_FlapjackManifest(_manifest))",
-  );
-
-  return `${lines.join("\n")}\n`;
+  return lines;
 }
 
-function round(value: number): number {
-  return Math.round(value * 1000) / 1000;
+/// The complete runnable script: imports, clients, helpers, the circuit, and the
+/// simulation with its plot and Flapjack export.
+export function generateScript(
+  document: CircuitDocument,
+  sbolDbUrl?: string | null,
+  flapjackUrl?: string | null,
+): string {
+  const varById = assignVarNames(document);
+  const sections = [
+    buildImports({
+      sbolDb: Boolean(sbolDbUrl),
+      flapjack: Boolean(flapjackUrl),
+      simulation: true,
+    }),
+    buildClients(sbolDbUrl, flapjackUrl, { flapjack: true }),
+    ["", ""],
+    buildSbolHelpers(),
+    ["", ""],
+    buildPlotHelper(),
+    ["", ""],
+    buildFlapjackHelper(),
+    ["", ""],
+    buildSbolComponents(document, varById),
+    [""],
+    buildCircuit(document, varById),
+    [""],
+    buildSimulationBody(document, varById),
+  ];
+  return joinSections(sections);
 }
 
-/// Build a runnable script that converts the generated `GeneticNetwork` to SBOL,
+/// A runnable script that converts the generated `GeneticNetwork` to SBOL,
 /// validates it, and emits RDF/XML plus the validation report as a MIME payload.
 export function buildSbolExportSource(
   document: CircuitDocument,
   sbolDbUrl?: string | null,
 ): string {
-  const lines = [
-    ...buildImports({
+  const varById = assignVarNames(document);
+  const sections = [
+    buildImports({
       sbolDb: Boolean(sbolDbUrl),
       flapjack: false,
       simulation: false,
     }),
-    buildNetworkSource(document, sbolDbUrl).trimEnd(),
-    "",
+    buildClients(sbolDbUrl, null, { flapjack: false }),
+    [""],
+    buildSbolHelpers(),
+    [""],
+    buildSbolComponents(document, varById),
+    [""],
+    buildCircuit(document, varById),
+    buildSbolExportBody(),
+  ];
+  return joinSections(sections);
+}
+
+/// The SBOL export body: convert the network, validate, and display the result.
+function buildSbolExportBody(): string[] {
+  return [
     "# --- SBOL export ---",
     "sbol_export_doc = network.to_sbol(sbol_doc=sbol_doc)",
     "sbol_identities = []",
@@ -637,23 +708,13 @@ export function buildSbolExportSource(
     "    'text/plain': f'SBOL export: {len(sbol_identities)} objects, {validation_count} validation issues',",
     "})",
   ];
-  return `${lines.join("\n")}\n`;
 }
 
-/// The complete runnable script: network construction followed by the
-/// simulation harness.
-export function generateScript(
-  document: CircuitDocument,
-  sbolDbUrl?: string | null,
-  flapjackUrl?: string | null,
-): string {
-  const imports = buildImports({
-    sbolDb: Boolean(sbolDbUrl),
-    flapjack: Boolean(flapjackUrl),
-    simulation: true,
-  }).join("\n");
-  const flapjackClient = buildFlapjackClientSource(flapjackUrl).join("\n");
-  return `${imports}\n${flapjackClient}\n${buildNetworkSource(document, sbolDbUrl)}${buildSimulationSource(document)}`;
+/// Join the section line-arrays into one script, collapsing runs of blank lines
+/// to at most one so the composed file stays tidy.
+function joinSections(sections: string[][]): string {
+  const text = sections.map((section) => section.join("\n")).join("\n");
+  return `${text.replace(/\n{3,}/g, "\n\n\n")}\n`;
 }
 
 // --- Reverse parse: edit the code, sync params back ---
