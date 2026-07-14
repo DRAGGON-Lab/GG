@@ -29,10 +29,10 @@ const CIRCUIT_ENV_MARKER = "circuit-runtime-req.txt";
 /// the client for the app's embedded SBOL server, letting scripts read and
 /// write the corpus the Data tab shows; pyFlapjack is the client for the app's
 /// embedded Flapjack server, letting scripts upload measurements and request
-/// analyses against the Flapjack tab's installation. pyFlapjack is pinned to the
-/// fork that supports the pandas 2 stack loica needs (upstream pins pandas 1.5).
+/// analyses against the Flapjack tab's installation. pyFlapjack is installed
+/// from git because the pandas-2 support loica needs is not yet on PyPI.
 const PYFLAPJACK_REQUIREMENT =
-  "pyflapjack @ git+https://github.com/marpaia/pyFlapjack.git";
+  "pyflapjack @ git+https://github.com/flapjacksynbio/pyFlapjack.git";
 const REQUIRED_PACKAGES = [
   LOICA_REQUIREMENT,
   "plotly",
