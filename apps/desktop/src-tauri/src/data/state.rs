@@ -5,6 +5,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
+use gg_data::sbol::SbolObjectStorage;
 use sbol_db_sparql::SparqlEngine;
 use sbol_db_sqlite::{connect_and_migrate, SqliteSqlConsole, SqliteStats, SqliteStore};
 use sqlx::sqlite::SqliteConnectOptions;
@@ -14,7 +15,7 @@ use sqlx::SqlitePool;
 /// managed state.
 pub struct DataStore {
     pub store: SqliteStore,
-    pub pool: SqlitePool,
+    pub objects: SbolObjectStorage,
     /// SQL console bound to a read-only connection so ad-hoc SQL can never
     /// mutate the corpus, regardless of the statement.
     pub sql_console: SqliteSqlConsole,
@@ -29,6 +30,7 @@ impl DataStore {
 
         let pool = connect_and_migrate(&url).await.map_err(|e| e.to_string())?;
         let store = SqliteStore::new(pool.clone());
+        let objects = SbolObjectStorage::open(db_path.to_path_buf())?;
         let sparql = SparqlEngine::new(store.triple_source());
         let stats = SqliteStats::new(pool.clone());
 
@@ -44,7 +46,7 @@ impl DataStore {
 
         Ok(Self {
             store,
-            pool,
+            objects,
             sql_console,
             stats,
             sparql,

@@ -4,14 +4,14 @@
 
 use std::time::Instant;
 
+use gg_data::sbol::SbolObjectSearch;
 use sbol_db_core::GraphId;
 use sbol_db_core::SerializationFormat;
 use sbol_db_sparql::{parse_query, ResultFormat, SparqlOptions};
 use sbol_db_storage::{
-    DbStats, ImportInput, LabStore, ListObjectsFilter, ObjectStore, SbolStore,
-    SequenceSearchOptions, SequenceSearchStore, SqlConsole, SqlExecuteRequest,
+    DbStats, ImportInput, LabStore, ObjectStore, SbolStore, SequenceSearchOptions,
+    SequenceSearchStore, SqlConsole, SqlExecuteRequest,
 };
-use sqlx::Row;
 use tauri::State;
 use uuid::Uuid;
 
@@ -154,33 +154,19 @@ pub async fn data_objects_list(
     let limit = limit
         .unwrap_or(OBJECT_DEFAULT_LIMIT)
         .clamp(1, OBJECT_MAX_LIMIT);
-    if let Some(iri_query) = iri_query
+    let iri_query = iri_query
         .as_deref()
         .map(str::trim)
-        .filter(|q| !q.is_empty())
-    {
-        let objects = list_objects_by_iri(&data, sbol_class, role, iri_query, after, limit).await?;
-        let next_cursor = if objects.len() as u32 >= limit {
-            objects.last().map(|o| o.iri.to_owned())
-        } else {
-            None
-        };
-        return Ok(ObjectListDto {
-            objects,
-            next_cursor,
-        });
-    }
-
-    let filter = ListObjectsFilter {
-        sbol_class,
-        role,
-        graph_id: None,
-        after_iri: after,
+        .filter(|query| !query.is_empty());
+    let objects = data.objects.list(SbolObjectSearch {
+        sbol_class: sbol_class.as_deref(),
+        role: role.as_deref(),
+        iri_query,
+        after_iri: after.as_deref(),
         limit,
-    };
-    let objects = data.store.list_objects(&filter).await.map_err(err)?;
+    })?;
     let next_cursor = if objects.len() as u32 >= limit {
-        objects.last().map(|o| o.iri.as_str().to_owned())
+        objects.last().map(|o| o.iri.to_owned())
     } else {
         None
     };
@@ -188,59 +174,6 @@ pub async fn data_objects_list(
         objects: objects.into_iter().map(Into::into).collect(),
         next_cursor,
     })
-}
-
-async fn list_objects_by_iri(
-    data: &DataStore,
-    sbol_class: Option<String>,
-    role: Option<String>,
-    iri_query: &str,
-    after: Option<String>,
-    limit: u32,
-) -> Result<Vec<ObjectDto>, String> {
-    let rows = sqlx::query(
-        r#"
-        SELECT id, iri, sbol_class, display_id, name, description,
-               graph_id, types, roles, data
-        FROM sbol_objects
-        WHERE is_deleted = 0
-          AND (?1 IS NULL OR sbol_class = ?1)
-          AND (?2 IS NULL OR EXISTS (SELECT 1 FROM json_each(roles) WHERE value = ?2))
-          AND instr(lower(iri), lower(?3)) > 0
-          AND (?4 IS NULL OR iri > ?4)
-        ORDER BY iri ASC
-        LIMIT ?5
-        "#,
-    )
-    .bind(sbol_class.as_deref())
-    .bind(role.as_deref())
-    .bind(iri_query)
-    .bind(after.as_deref())
-    .bind(limit as i64)
-    .fetch_all(&data.pool)
-    .await
-    .map_err(err)?;
-
-    rows.into_iter()
-        .map(|row| {
-            let types: String = row.try_get("types").map_err(err)?;
-            let roles: String = row.try_get("roles").map_err(err)?;
-            let data: String = row.try_get("data").map_err(err)?;
-
-            Ok(ObjectDto {
-                id: row.try_get("id").map_err(err)?,
-                iri: row.try_get("iri").map_err(err)?,
-                sbol_class: row.try_get("sbol_class").map_err(err)?,
-                display_id: row.try_get("display_id").map_err(err)?,
-                name: row.try_get("name").map_err(err)?,
-                description: row.try_get("description").map_err(err)?,
-                graph_id: row.try_get("graph_id").map_err(err)?,
-                types: serde_json::from_str(&types).map_err(err)?,
-                roles: serde_json::from_str(&roles).map_err(err)?,
-                data: serde_json::from_str(&data).map_err(err)?,
-            })
-        })
-        .collect()
 }
 
 #[tauri::command]

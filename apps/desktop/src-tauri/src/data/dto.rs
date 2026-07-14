@@ -3,6 +3,7 @@
 //! drop fields the UI never reads (content hashes, the always-`None` SQLite
 //! backend pid).
 
+use gg_data::sbol::SbolObject;
 use sbol_db_core::{ImportReport, ObjectTerm, SbolObjectRecord, SubjectTerm, Triple};
 use sbol_db_storage::{
     BatchSequenceMatch, ClassCount, CorpusCounts, GraphOverview, RelationalSchema, SequenceMatch,
@@ -201,6 +202,23 @@ impl From<SbolObjectRecord> for ObjectDto {
             name: o.name,
             description: o.description,
             graph_id: o.graph_id.map(|g| g.0.to_string()),
+            types: o.types,
+            roles: o.roles,
+            data: o.data,
+        }
+    }
+}
+
+impl From<SbolObject> for ObjectDto {
+    fn from(o: SbolObject) -> Self {
+        Self {
+            id: o.id,
+            iri: o.iri,
+            sbol_class: o.sbol_class,
+            display_id: o.display_id,
+            name: o.name,
+            description: o.description,
+            graph_id: o.graph_id,
             types: o.types,
             roles: o.roles,
             data: o.data,
