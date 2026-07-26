@@ -183,6 +183,22 @@ where
             ));
         }
 
+        let attachment_paths = manifest
+            .attachments
+            .iter()
+            .map(|attachment| attachment.logical_path.as_str())
+            .collect::<BTreeSet<_>>();
+        let missing_data_stores = [("sbol.sqlite3", "SBOL"), ("flapjack.sqlite3", "Flapjack")]
+            .into_iter()
+            .filter_map(|(path, label)| (!attachment_paths.contains(path)).then_some(label))
+            .collect::<Vec<_>>();
+        if !missing_data_stores.is_empty() {
+            warnings.push(format!(
+                "This snapshot predates full-state backups and does not include {} data. Those areas will start empty after restore.",
+                missing_data_stores.join(" or ")
+            ));
+        }
+
         Ok(BackupRestorePlan {
             snapshot,
             required_bytes,
@@ -561,6 +577,16 @@ mod tests {
                 &staging,
             )
             .unwrap();
+
+        assert!(engine
+            .restore_plan(BackupRestoreRequest {
+                current_schema_version: 1,
+                master_key: &key,
+                snapshot_id: &summary.id,
+            })
+            .unwrap()
+            .warnings
+            .is_empty());
 
         assert!(staging.join("gg.sqlite3").is_file());
         assert!(staging.join("sbol.sqlite3").is_file());
