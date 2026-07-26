@@ -69,7 +69,8 @@ fn parse_import_format(s: &str) -> Result<SerializationFormat, String> {
 #[tauri::command]
 pub async fn data_overview(data: State<'_, DataStore>) -> Result<OverviewDto, String> {
     let counts = data.store.corpus_counts().await.map_err(err)?;
-    let recent = data.store.recent_graphs(5).await.map_err(err)?;
+    let mut recent = data.store.recent_graphs(5).await.map_err(err)?;
+    refresh_graph_object_counts(&data, &mut recent).await?;
     let classes = data.store.top_classes(10).await.map_err(err)?;
     Ok(OverviewDto {
         counts: counts.into(),
@@ -91,11 +92,12 @@ pub async fn data_graphs_list(
     let offset = offset.unwrap_or(0).max(0);
     let kind_ref = kind.as_deref();
     let total = data.store.count_graphs(kind_ref).await.map_err(err)?;
-    let graphs = data
+    let mut graphs = data
         .store
         .list_graph_overviews(kind_ref, limit, offset)
         .await
         .map_err(err)?;
+    refresh_graph_object_counts(&data, &mut graphs).await?;
     Ok(GraphListDto {
         total,
         limit,
@@ -106,12 +108,24 @@ pub async fn data_graphs_list(
 
 #[tauri::command]
 pub async fn data_graph_get(data: State<'_, DataStore>, id: Uuid) -> Result<GraphDto, String> {
-    data.store
+    let mut graph = data
+        .store
         .get_graph_overview(GraphId(id))
         .await
         .map_err(err)?
-        .map(Into::into)
-        .ok_or_else(|| format!("graph {id} not found"))
+        .ok_or_else(|| format!("graph {id} not found"))?;
+    graph.object_count = data.graph_object_count(graph.id).await?;
+    Ok(graph.into())
+}
+
+async fn refresh_graph_object_counts(
+    data: &DataStore,
+    graphs: &mut [sbol_db_storage::GraphOverview],
+) -> Result<(), String> {
+    for graph in graphs {
+        graph.object_count = data.graph_object_count(graph.id).await?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -156,11 +170,28 @@ pub async fn data_objects_list(
     let filter = ListObjectsFilter {
         sbol_class,
         role,
-        graph_id: graph_id.map(GraphId),
-        after_iri: after,
+        graph_id: None,
+        after_iri: after.clone(),
         limit,
     };
-    let objects = data.store.list_objects(&filter).await.map_err(err)?;
+    let objects = if let Some(graph_id) = graph_id {
+        let iris = data
+            .graph_object_iris(
+                GraphId(graph_id),
+                filter.sbol_class.as_deref(),
+                filter.role.as_deref(),
+                filter.after_iri.as_deref(),
+                filter.limit,
+            )
+            .await?;
+        let iri_refs = iris.iter().map(String::as_str).collect::<Vec<_>>();
+        data.store
+            .get_objects_by_iris(&iri_refs)
+            .await
+            .map_err(err)?
+    } else {
+        data.store.list_objects(&filter).await.map_err(err)?
+    };
     let next_cursor = if objects.len() as u32 >= limit {
         objects.last().map(|o| o.iri.as_str().to_owned())
     } else {

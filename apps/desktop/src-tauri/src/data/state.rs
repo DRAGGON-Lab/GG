@@ -5,6 +5,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
+use sbol_db_core::GraphId;
 use sbol_db_sparql::SparqlEngine;
 use sbol_db_sqlite::{connect_and_migrate, SqliteSqlConsole, SqliteStats, SqliteStore};
 use sqlx::sqlite::SqliteConnectOptions;
@@ -48,14 +49,106 @@ impl DataStore {
             sparql,
         })
     }
+
+    /// Count objects represented in a document graph by joining the graph's
+    /// triple subjects to the global derived-object view.
+    ///
+    /// `sbol_objects.graph_id` records the most recent import of an IRI, so it
+    /// cannot represent membership when the same SBOL object appears in more
+    /// than one imported document. The triples remain graph-owned and are the
+    /// authoritative membership relation.
+    pub async fn graph_object_count(&self, graph_id: GraphId) -> Result<i64, String> {
+        sqlx::query_scalar(
+            r#"
+            SELECT count(DISTINCT o.iri)
+            FROM sbol_objects o
+            JOIN sbol_triples t ON t.subject_iri = o.iri
+            JOIN sbol_graphs g ON g.iri = t.graph_iri
+            WHERE g.id = ? AND o.is_deleted = 0
+            "#,
+        )
+        .bind(graph_id.0.to_string())
+        .fetch_one(self.store.pool())
+        .await
+        .map_err(|error| error.to_string())
+    }
+
+    pub async fn graph_object_iris(
+        &self,
+        graph_id: GraphId,
+        sbol_class: Option<&str>,
+        role: Option<&str>,
+        after_iri: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<String>, String> {
+        sqlx::query_scalar(
+            r#"
+            SELECT DISTINCT o.iri
+            FROM sbol_objects o
+            JOIN sbol_triples t ON t.subject_iri = o.iri
+            JOIN sbol_graphs g ON g.iri = t.graph_iri
+            WHERE g.id = ?1
+              AND o.is_deleted = 0
+              AND (?2 IS NULL OR o.sbol_class = ?2)
+              AND (?3 IS NULL OR EXISTS (
+                SELECT 1 FROM json_each(o.roles) WHERE value = ?3
+              ))
+              AND (?4 IS NULL OR o.iri > ?4)
+            ORDER BY o.iri ASC
+            LIMIT ?5
+            "#,
+        )
+        .bind(graph_id.0.to_string())
+        .bind(sbol_class)
+        .bind(role)
+        .bind(after_iri)
+        .bind(i64::from(limit))
+        .fetch_all(self.store.pool())
+        .await
+        .map_err(|error| error.to_string())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use sbol_db_core::SerializationFormat;
     use sbol_db_sparql::SparqlOptions;
-    use sbol_db_storage::{DbStats, LabStore, SqlConsole, SqlExecuteRequest};
+    use sbol_db_storage::{DbStats, ImportInput, LabStore, SqlConsole, SqlExecuteRequest};
+
+    const SYNBIOHUB_SBOL2_RDF_XML: &str = r#"<?xml version="1.0" ?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:sbh="http://wiki.synbiohub.org/wiki/Terms/synbiohub#"
+         xmlns:sbol="http://sbols.org/v2#"
+         xmlns:dcterms="http://purl.org/dc/terms/"
+         xmlns:ns0="http://purl.obolibrary.org/obo/"
+         xmlns:ns1="https://wiki.synbiohub.org/wiki/Terms/synbiohub#">
+  <sbol:ComponentDefinition rdf:about="https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR/1">
+    <sbol:persistentIdentity rdf:resource="https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR"/>
+    <sbol:displayId>R0063_pLuxR_pR</sbol:displayId>
+    <sbol:version>1</sbol:version>
+    <dcterms:title>R0063_pLuxR-pR</dcterms:title>
+    <dcterms:description>MoClo Basic Part: Controllable promoter - pLuxR(pR)</dcterms:description>
+    <ns0:OBI_0001617>26479688</ns0:OBI_0001617>
+    <sbh:ownedBy rdf:resource="https://synbiohub.org/user/Gon"/>
+    <sbh:topLevel rdf:resource="https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR/1"/>
+    <ns1:sourceOrganism rdf:resource="http://purl.obolibrary.org/obo/NCBITaxon_562"/>
+    <sbol:type rdf:resource="http://www.biopax.org/release/biopax-level3.owl#DnaRegion"/>
+    <sbol:role rdf:resource="http://identifiers.org/so/SO:0000167"/>
+    <sbol:sequence rdf:resource="https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR_sequence/1"/>
+  </sbol:ComponentDefinition>
+  <sbol:Sequence rdf:about="https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR_sequence/1">
+    <sbol:persistentIdentity rdf:resource="https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR_sequence"/>
+    <sbol:displayId>R0063_pLuxR_pR_sequence</sbol:displayId>
+    <sbol:version>1</sbol:version>
+    <dcterms:title>R0063_pLuxR-pR Sequence</dcterms:title>
+    <sbh:ownedBy rdf:resource="https://synbiohub.org/user/Gon"/>
+    <sbh:topLevel rdf:resource="https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR_sequence/1"/>
+    <sbol:elements>ACCTGTACGATCCTACAGGTGCTTATGTTAAGTAATTGTATTCCCAGCGATACAATAGTGTGACAAAAATCCAATTTATTAGAATCAAATGTCAATCCATTACCGTTTTAATGATATATAACACGCAAAACTTGCGACAAACAATAGGTAA</sbol:elements>
+    <sbol:encoding rdf:resource="http://www.chem.qmul.ac.uk/iubmb/misc/naseq.html"/>
+  </sbol:Sequence>
+</rdf:RDF>"#;
 
     fn sql(query: &str) -> SqlExecuteRequest {
         SqlExecuteRequest {
@@ -114,5 +207,49 @@ mod tests {
             .execute(sql("CREATE TABLE scratch (x INTEGER)"))
             .await
             .is_err());
+    }
+
+    #[tokio::test]
+    async fn synbiohub_sbol2_objects_remain_visible_in_every_imported_graph() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = DataStore::open(&dir.path().join("sbol.sqlite3"))
+            .await
+            .expect("open");
+
+        let import = || ImportInput {
+            body: SYNBIOHUB_SBOL2_RDF_XML.to_owned(),
+            format: SerializationFormat::RdfXml,
+            namespace: None,
+            source_uri: Some(
+                "https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR/1".to_owned(),
+            ),
+            document_iri: None,
+            created_by: None,
+            name: Some("R0063_pLuxR_pR.xml".to_owned()),
+            description: None,
+        };
+        let first = data
+            .store
+            .import_document(import())
+            .await
+            .expect("import SynBioHub SBOL2");
+        let second = data
+            .store
+            .import_document(import())
+            .await
+            .expect("reimport SynBioHub SBOL2");
+
+        assert_eq!(first.object_count, 2);
+        assert_eq!(second.object_count, 2);
+        assert_eq!(data.graph_object_count(first.graph_id).await.unwrap(), 2);
+        assert_eq!(data.graph_object_count(second.graph_id).await.unwrap(), 2);
+
+        let object_iris = data
+            .graph_object_iris(first.graph_id, None, None, None, 100)
+            .await
+            .unwrap();
+        assert!(object_iris
+            .iter()
+            .any(|iri| { iri == "https://synbiohub.org/user/Gon/CIDARMoCloParts/R0063_pLuxR_pR" }));
     }
 }
