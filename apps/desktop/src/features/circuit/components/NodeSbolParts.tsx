@@ -1,13 +1,22 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import type { SbolPartRef } from "@/features/circuit/core/loica-model";
-import { loadObjects } from "@/features/data/core/data-service";
+import {
+  loadObjects,
+  SBOL_DATA_CHANGED_EVENT,
+} from "@/features/data/core/data-service";
 import type { SbolObject } from "@/features/data/core/data-types";
 import { shortIri } from "@/features/data/core/format";
 import { ArrowDown, ArrowUp, Plus, RefreshCw, Trash2 } from "@/ui";
 import { cx } from "@/ui/class-name";
 
-const SBOL_COMPONENT_CLASS = "https://sbols.org/v3#Component";
+const SBOL_COMPONENT_CLASS = "http://sbols.org/v3#Component";
 const PAGE_SIZE = 200;
 
 type RoleHint =
@@ -32,6 +41,12 @@ export function NodeSbolParts({ onChange, parts }: NodeSbolPartsProps) {
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
 
+  const reload = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    setRevision((value) => value + 1);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -54,6 +69,11 @@ export function NodeSbolParts({ onChange, parts }: NodeSbolPartsProps) {
       cancelled = true;
     };
   }, [revision]);
+
+  useEffect(() => {
+    window.addEventListener(SBOL_DATA_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(SBOL_DATA_CHANGED_EVENT, reload);
+  }, [reload]);
 
   const selectedIris = useMemo(
     () => new Set(parts.map((part) => part.iri)),
@@ -93,7 +113,7 @@ export function NodeSbolParts({ onChange, parts }: NodeSbolPartsProps) {
         <button
           className="grid size-6 cursor-pointer place-items-center rounded-[6px] border border-cg-border bg-transparent text-cg-muted transition-colors hover:bg-cg-surface-hover hover:text-cg-fg disabled:cursor-default disabled:opacity-40"
           disabled={loading}
-          onClick={() => setRevision((value) => value + 1)}
+          onClick={reload}
           title="Reload SBOL objects"
           type="button"
         >
@@ -215,15 +235,20 @@ export function NodeSbolParts({ onChange, parts }: NodeSbolPartsProps) {
 }
 
 async function loadSbolObjects(): Promise<SbolObject[]> {
-  const componentList = await loadObjects({
-    limit: PAGE_SIZE,
-    sbolClass: SBOL_COMPONENT_CLASS,
-  });
-  if (componentList.objects.length > 0) {
-    return componentList.objects;
-  }
-  const fallbackList = await loadObjects({ limit: PAGE_SIZE });
-  return fallbackList.objects;
+  const objects: SbolObject[] = [];
+  let after: string | null = null;
+
+  do {
+    const page = await loadObjects({
+      after,
+      limit: PAGE_SIZE,
+      sbolClass: SBOL_COMPONENT_CLASS,
+    });
+    objects.push(...page.objects);
+    after = page.nextCursor;
+  } while (after);
+
+  return objects;
 }
 
 function IconControl({
