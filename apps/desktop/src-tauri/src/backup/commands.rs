@@ -7,10 +7,10 @@ use std::{
 };
 
 use gg_backup::{
-    generate_master_key, install_staged_restore, master_key_from_recovery_key,
-    recovery_key_for_master_key, stores::FileSystemBackupStore, BackupCreateRequest, BackupEngine,
-    BackupMasterKey, BackupRestorePlan, BackupRestoreRequest, BackupRetentionPlan,
-    BackupRetentionPolicy,
+    create_sqlite_snapshot, generate_master_key, install_staged_restore,
+    master_key_from_recovery_key, recovery_key_for_master_key, stores::FileSystemBackupStore,
+    BackupCreateRequest, BackupEngine, BackupFileSource, BackupMasterKey, BackupRestorePlan,
+    BackupRestoreRequest, BackupRetentionPlan, BackupRetentionPolicy,
 };
 use gg_data::backup::{BackupActivityEntry, BackupActivityInput};
 use gg_data::{
@@ -389,10 +389,29 @@ fn create_local_backup(
             .path()
             .app_data_dir()
             .map_err(|error| error.to_string())?;
+        let sbol_snapshot_path = work_dir.join("sbol.snapshot.sqlite3");
+        let flapjack_snapshot_path = work_dir.join("flapjack.snapshot.sqlite3");
+        create_sqlite_snapshot(&app_data_dir.join("sbol.sqlite3"), &sbol_snapshot_path)
+            .map_err(|error| error.to_string())?;
+        create_sqlite_snapshot(
+            &app_data_dir.join("flapjack.sqlite3"),
+            &flapjack_snapshot_path,
+        )
+        .map_err(|error| error.to_string())?;
         let store = FileSystemBackupStore::new(backup_root);
         let engine = BackupEngine::new(store);
         let summary = engine
             .create_snapshot(BackupCreateRequest {
+                additional_files: vec![
+                    BackupFileSource {
+                        logical_path: "sbol.sqlite3".to_string(),
+                        source_path: sbol_snapshot_path,
+                    },
+                    BackupFileSource {
+                        logical_path: "flapjack.sqlite3".to_string(),
+                        source_path: flapjack_snapshot_path,
+                    },
+                ],
                 app_data_dir: &app_data_dir,
                 app_version: env!("CARGO_PKG_VERSION").to_string(),
                 database_snapshot_path: &snapshot_database_path,
