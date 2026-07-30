@@ -340,6 +340,9 @@ export type CircuitNode = {
   /// Display name and the basis for the generated Python variable.
   name: string;
   params: Record<string, ParamValue>;
+  /// SBOL Component identity selected by an automated designer. Automated
+  /// candidates always source this IRI from GG's configured SBOL database.
+  componentId?: string;
   /// Ordered SBOL database objects connected to this node, e.g. promoter then RBS.
   sbolParts?: SbolPartRef[];
   /// Number of input handles for a dynamic-input operator (`Sum`).

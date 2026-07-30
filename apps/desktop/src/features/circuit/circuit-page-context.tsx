@@ -3,6 +3,12 @@ import { createContext, useContext } from "react";
 
 import type { EnvState } from "@/features/circuit/components/SimulationPanel";
 import type { RunLine } from "@/features/circuit/core/circuit-run";
+import type {
+  DesignCandidate,
+  DesignPortfolio,
+  DesignRequest,
+  DesignRunState,
+} from "@/features/circuit/core/design-types";
 import type { AppEdge, AppNode } from "@/features/circuit/core/flow-adapter";
 import type {
   CircuitDocument,
@@ -41,6 +47,19 @@ export type CircuitPageContextValue = {
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
+
+  // Automated design
+  designRequest: DesignRequest;
+  designState: DesignRunState;
+  designProgress: string[];
+  designError: string | null;
+  designPortfolio: DesignPortfolio | null;
+  updateDesignRequest: (patch: Partial<DesignRequest>) => void;
+  runDesign: () => void;
+  adoptDesign: (candidate: DesignCandidate) => void;
+  adoptedCandidateId: string | null;
+  canUndoDesignAdoption: boolean;
+  undoDesignAdoption: () => void;
 
   // Node inspector (bound to the current selection)
   document: CircuitDocument;

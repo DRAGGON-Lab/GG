@@ -76,6 +76,12 @@ function parseNodes(value: unknown): CircuitNode[] {
         y: typeof position?.y === "number" ? position.y : 0,
       },
     };
+    if (
+      typeof record.componentId === "string" &&
+      record.componentId.trim() !== ""
+    ) {
+      node.componentId = record.componentId;
+    }
     const sbolParts = parseSbolParts(record.sbolParts);
     if (sbolParts.length > 0) {
       node.sbolParts = sbolParts;

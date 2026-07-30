@@ -18,10 +18,23 @@ pub struct PythonState {
 
 impl PythonState {
     /// Resolve the interpreter and `uv` paths from the (optional) bundled
-    /// resource dir, falling back to the dev layout.
+    /// resource dir, falling back to the dev layout. Development builds prefer
+    /// the source runtime: Tauri copies resources into `target/debug`, and
+    /// macOS can reject the copied interpreter before the app is signed.
     pub fn new(resource_dir: Option<PathBuf>) -> Self {
-        let interpreter = gg_pyenv::python_executable(resource_dir.as_deref());
-        let uv = gg_pyenv::uv_executable(resource_dir.as_deref());
+        let (interpreter, uv) = if cfg!(debug_assertions) {
+            (
+                gg_pyenv::python_executable(None)
+                    .or_else(|| gg_pyenv::python_executable(resource_dir.as_deref())),
+                gg_pyenv::uv_executable(None)
+                    .or_else(|| gg_pyenv::uv_executable(resource_dir.as_deref())),
+            )
+        } else {
+            (
+                gg_pyenv::python_executable(resource_dir.as_deref()),
+                gg_pyenv::uv_executable(resource_dir.as_deref()),
+            )
+        };
         Self {
             interpreter,
             uv,
@@ -85,4 +98,38 @@ fn spawn_diagnostics_forwarder(app: AppHandle, client: Arc<PythonLspClient>) {
             }
         }
     });
+}
+
+#[cfg(all(test, debug_assertions))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug_runtime_prefers_source_tree_over_copied_resources() {
+        let (Some(expected_python), Some(expected_uv)) = (
+            gg_pyenv::python_executable(None),
+            gg_pyenv::uv_executable(None),
+        ) else {
+            eprintln!("skipping: source Python or uv runtime not found");
+            return;
+        };
+
+        let resource_dir = tempfile::tempdir().unwrap();
+        let runtime = resource_dir.path().join("runtime");
+        #[cfg(not(windows))]
+        let (copied_python, copied_uv) =
+            (runtime.join("python/bin/python3"), runtime.join("uv/uv"));
+        #[cfg(windows)]
+        let (copied_python, copied_uv) =
+            (runtime.join("python/python.exe"), runtime.join("uv/uv.exe"));
+        std::fs::create_dir_all(copied_python.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(copied_uv.parent().unwrap()).unwrap();
+        std::fs::write(&copied_python, []).unwrap();
+        std::fs::write(&copied_uv, []).unwrap();
+
+        let state = PythonState::new(Some(resource_dir.path().to_path_buf()));
+
+        assert_eq!(state.interpreter(), Some(&expected_python));
+        assert_eq!(state.uv(), Some(&expected_uv));
+    }
 }

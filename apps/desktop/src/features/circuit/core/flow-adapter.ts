@@ -17,6 +17,7 @@ export type CircuitNodeData = {
   kind: NodeKind;
   name: string;
   params: Record<string, ParamValue>;
+  componentId?: string;
   sbolParts?: SbolPartRef[];
   inputCount?: number;
   [key: string]: unknown;
@@ -34,6 +35,7 @@ export function flowNodeType(kind: NodeKind): "species" | "operator" {
 export function toFlowNode(node: CircuitNode): AppNode {
   return {
     data: {
+      componentId: node.componentId,
       inputCount: node.inputCount,
       kind: node.kind,
       name: node.name,
@@ -68,6 +70,9 @@ export function nodeFromFlow(node: AppNode): CircuitNode {
     params: node.data.params,
     position: { x: node.position.x, y: node.position.y },
   };
+  if (node.data.componentId !== undefined) {
+    domain.componentId = node.data.componentId;
+  }
   if (node.data.sbolParts !== undefined && node.data.sbolParts.length > 0) {
     domain.sbolParts = node.data.sbolParts;
   }

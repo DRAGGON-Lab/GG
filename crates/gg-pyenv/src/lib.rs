@@ -31,6 +31,11 @@ const UV_RELATIVE: &[&str] = &["runtime", "uv", "uv.exe"];
 /// root alongside its sources.
 pub const VENV_DIR: &str = ".venv";
 
+/// Keep uv's disposable cache inside the workspace it manages. This avoids
+/// depending on access to a process-global cache such as `~/.cache/uv`, which
+/// is not available when GG is launched from a sandboxed development host.
+const UV_CACHE_DIR: &str = ".uv-cache";
+
 /// Path from a workspace root to the venv's Python interpreter.
 #[cfg(not(windows))]
 const VENV_PYTHON_RELATIVE: &[&str] = &[VENV_DIR, "bin", "python3"];
@@ -380,6 +385,9 @@ fn uv_command(uv: &Path, workspace_root: &Path) -> Command {
         // Surface uv's progress promptly and without ANSI styling, which the
         // line-based output panel renders verbatim.
         .env("NO_COLOR", "1")
+        // Keep cache writes within the workspace boundary. uv creates this
+        // directory lazily and it is ignored alongside the virtualenv below.
+        .env("UV_CACHE_DIR", workspace_root.join(UV_CACHE_DIR))
         // Pin to the bundled interpreter; never let uv fetch its own Python.
         .env("UV_PYTHON_DOWNLOADS", "never");
     command
@@ -484,8 +492,15 @@ where
 {
     let on_line = std::sync::Arc::new(on_line);
 
+    // Probe first so macOS has a chance to assess a freshly copied runtime
+    // before uv tries to inspect it. `python_version` retries the transient
+    // first-exec kill and returns a useful error if the interpreter is unusable.
+    python_version(base_python)
+        .await
+        .map_err(|error| format!("bundled Python runtime is unavailable: {error}"))?;
+
     // Keep the venv out of version control, whether or not git is set up yet.
-    if let Err(error) = ensure_venv_gitignored(workspace_root) {
+    if let Err(error) = ensure_runtime_gitignored(workspace_root) {
         on_line(OutputLine {
             stream: Stream::Stderr,
             line: format!("warning: could not update .gitignore: {error}"),
@@ -537,6 +552,10 @@ pub async fn install_packages<F>(
 where
     F: Fn(OutputLine) + Send + Sync + 'static,
 {
+    python_version(base_python)
+        .await
+        .map_err(|error| format!("bundled Python runtime is unavailable: {error}"))?;
+
     bound_requires_python(workspace_root, base_python).await;
 
     let mut command = uv_command(uv, workspace_root);
@@ -693,35 +712,39 @@ fn venv_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join(VENV_DIR)
 }
 
-/// Ensure the workspace's `.gitignore` ignores `.venv/`, creating the file if
-/// absent and appending the entry only when it isn't already present. Done
+/// Ensure the workspace's `.gitignore` ignores GG's virtualenv and uv cache,
+/// creating the file if absent and appending only missing entries. Done
 /// regardless of whether the directory is a git repository yet.
-fn ensure_venv_gitignored(workspace_root: &Path) -> std::io::Result<()> {
+fn ensure_runtime_gitignored(workspace_root: &Path) -> std::io::Result<()> {
     let gitignore = workspace_root.join(".gitignore");
-    let entry = format!("{VENV_DIR}/");
-
-    let existing = match std::fs::read_to_string(&gitignore) {
+    let mut updated = match std::fs::read_to_string(&gitignore) {
         Ok(contents) => contents,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(error) => return Err(error),
     };
 
-    // Already ignored, with or without the trailing slash? Nothing to do.
-    let already = existing
-        .lines()
-        .map(str::trim)
-        .any(|line| line == entry || line == VENV_DIR);
-    if already {
-        return Ok(());
+    let mut changed = false;
+    for directory in [VENV_DIR, UV_CACHE_DIR] {
+        let entry = format!("{directory}/");
+        let already = updated
+            .lines()
+            .map(str::trim)
+            .any(|line| line == entry || line == directory);
+        if already {
+            continue;
+        }
+        if !updated.is_empty() && !updated.ends_with('\n') {
+            updated.push('\n');
+        }
+        updated.push_str(&entry);
+        updated.push('\n');
+        changed = true;
     }
 
-    let mut updated = existing;
-    if !updated.is_empty() && !updated.ends_with('\n') {
-        updated.push('\n');
+    if changed {
+        std::fs::write(&gitignore, updated)?;
     }
-    updated.push_str(&entry);
-    updated.push('\n');
-    std::fs::write(&gitignore, updated)
+    Ok(())
 }
 
 /// Run `python --version` and return the trimmed version string (e.g.
@@ -770,6 +793,10 @@ mod tests {
 
     fn resolved_python() -> Option<PathBuf> {
         python_executable(None)
+    }
+
+    fn resolved_uv() -> Option<PathBuf> {
+        uv_executable(None)
     }
 
     #[test]
@@ -838,9 +865,9 @@ mod tests {
     #[test]
     fn gitignore_created_when_absent() {
         let dir = tempfile::tempdir().unwrap();
-        ensure_venv_gitignored(dir.path()).unwrap();
+        ensure_runtime_gitignored(dir.path()).unwrap();
         let contents = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
-        assert_eq!(contents, ".venv/\n");
+        assert_eq!(contents, ".venv/\n.uv-cache/\n");
     }
 
     #[test]
@@ -849,17 +876,42 @@ mod tests {
         let gitignore = dir.path().join(".gitignore");
         std::fs::write(&gitignore, "build/\n").unwrap();
 
-        ensure_venv_gitignored(dir.path()).unwrap();
+        ensure_runtime_gitignored(dir.path()).unwrap();
         assert_eq!(
             std::fs::read_to_string(&gitignore).unwrap(),
-            "build/\n.venv/\n"
+            "build/\n.venv/\n.uv-cache/\n"
         );
 
-        // Idempotent: a second call (and a bare `.venv` form) adds nothing.
-        ensure_venv_gitignored(dir.path()).unwrap();
-        std::fs::write(&gitignore, ".venv\n").unwrap();
-        ensure_venv_gitignored(dir.path()).unwrap();
-        assert_eq!(std::fs::read_to_string(&gitignore).unwrap(), ".venv\n");
+        // Idempotent: a second call (and bare directory forms) add nothing.
+        ensure_runtime_gitignored(dir.path()).unwrap();
+        std::fs::write(&gitignore, ".venv\n.uv-cache\n").unwrap();
+        ensure_runtime_gitignored(dir.path()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&gitignore).unwrap(),
+            ".venv\n.uv-cache\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn creates_venv_with_workspace_local_uv_cache() {
+        let (Some(python), Some(uv)) = (resolved_python(), resolved_uv()) else {
+            eprintln!("skipping: bundled Python or uv runtime not found");
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("quiver-runtime");
+        std::fs::create_dir(&root).unwrap();
+        let lines = Arc::new(Mutex::new(Vec::<OutputLine>::new()));
+        let captured = lines.clone();
+        let code = create_venv(&uv, &python, &root, move |line| {
+            captured.lock().unwrap().push(line);
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(code, Some(0), "uv output: {:?}", lines.lock().unwrap());
+        assert!(workspace_venv_python(&root).is_some());
+        assert!(root.join(UV_CACHE_DIR).is_dir());
     }
 
     #[tokio::test]
