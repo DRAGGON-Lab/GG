@@ -9,6 +9,8 @@ export type CircuitDockPanelKind =
   | "canvas"
   | "palette"
   | "node"
+  | "design"
+  | "validate"
   | "code"
   | "simulate"
   | "output";

@@ -4,6 +4,7 @@ mod backup;
 mod data;
 mod flapjack;
 mod flapjack_server;
+mod grn_validation;
 mod inspector;
 mod mcp;
 mod python;
@@ -65,6 +66,7 @@ pub fn run() {
             app.manage(flapjack_store);
 
             let resource_dir = app.path().resource_dir().ok();
+            app.manage(grn_validation::GrnLeanState::new(resource_dir.clone()));
             app.manage(python::PythonState::new(resource_dir));
             backup::start_backup_scheduler(app.handle().clone());
             mcp::spawn_initial_connect(app.handle().clone());
@@ -140,6 +142,8 @@ pub fn run() {
             sbol_server::commands::sbol_server_info,
             flapjack_server::commands::flapjack_server_ensure,
             flapjack_server::commands::flapjack_server_info,
+            grn_validation::commands::grn_analyzer_status,
+            grn_validation::commands::grn_analyze,
             flapjack::commands::flapjack_overview,
             flapjack::commands::flapjack_studies_list,
             flapjack::commands::flapjack_study_get,

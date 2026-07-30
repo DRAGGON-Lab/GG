@@ -124,6 +124,20 @@ export function NodeInspector({
         />
       </label>
 
+      {node.componentId ? (
+        <div className="grid gap-1 rounded-[6px] border border-cg-border bg-cg-surface/55 px-2 py-1.5">
+          <span className="text-[9px] font-semibold uppercase tracking-wide text-cg-muted">
+            SBOL design component
+          </span>
+          <span
+            className="truncate font-mono text-[10px] text-cg-fg"
+            title={node.componentId}
+          >
+            {node.componentId}
+          </span>
+        </div>
+      ) : null}
+
       <WiringSummary
         category={spec.category}
         inputNames={inputNames}

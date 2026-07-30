@@ -8,6 +8,7 @@ import {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  useReactFlow,
 } from "@xyflow/react";
 import {
   type DockviewApi,
@@ -28,11 +29,13 @@ import {
   CircuitDockTab,
 } from "@/features/circuit/components/CircuitDock";
 import { CircuitOutputPanel } from "@/features/circuit/components/CircuitOutputPanel";
+import { DesignPanel } from "@/features/circuit/components/DesignPanel";
 import { LoicaCodeEditor } from "@/features/circuit/components/LoicaCodeEditor";
 import { NodeInspector } from "@/features/circuit/components/NodeInspector";
 import { NodePalette } from "@/features/circuit/components/NodePalette";
 import { SimulationPanel } from "@/features/circuit/components/SimulationPanel";
 import type { EnvState } from "@/features/circuit/components/SimulationPanel";
+import { ValidationPanel } from "@/features/circuit/components/ValidationPanel";
 import {
   CIRCUIT_FILE_EXTENSION,
   loadCircuitFile,
@@ -58,6 +61,14 @@ import {
   parseParamsFromCode,
   SBOL_EXPORT_MIME,
 } from "@/features/circuit/core/codegen";
+import { runQuiverDesign } from "@/features/circuit/core/design-run";
+import {
+  DEFAULT_DESIGN_REQUEST,
+  type DesignCandidate,
+  type DesignPortfolio,
+  type DesignRequest,
+  type DesignRunState,
+} from "@/features/circuit/core/design-types";
 import {
   type AppEdge,
   type AppNode,
@@ -68,6 +79,7 @@ import {
   toFlowNode,
   toFlowNodes,
 } from "@/features/circuit/core/flow-adapter";
+import { documentFromGrnWire } from "@/features/circuit/core/grn-wire";
 import {
   createNode,
   emptyDocument,
@@ -109,6 +121,8 @@ const CIRCUIT_DOCK_TAB_COMPONENTS = { circuitTab: CircuitDockTab };
 
 const CANVAS_PANEL_ID = "circuit-canvas";
 const NODE_PANEL_ID = "circuit-node";
+const DESIGN_PANEL_ID = "circuit-design";
+const VALIDATE_PANEL_ID = "circuit-validate";
 const CODE_PANEL_ID = "circuit-code";
 const SIMULATE_PANEL_ID = "circuit-simulate";
 const OUTPUT_PANEL_ID = "circuit-output";
@@ -116,6 +130,7 @@ const OUTPUT_PANEL_ID = "circuit-output";
 // The right tool group is compact for Node/Simulate but widens for the Code tab
 // so the generated script is readable without a manual resize each time.
 const TOOL_GROUP_WIDTH = 320;
+const DESIGN_GROUP_WIDTH = 460;
 const CODE_GROUP_WIDTH = 640;
 
 type SbolExportPayload = {
@@ -130,6 +145,8 @@ type SbolExportPayload = {
 const renderCanvas = () => <CanvasPanel />;
 const renderPalette = () => <PalettePanel />;
 const renderNode = () => <NodePanel />;
+const renderDesign = () => <DesignTabPanel />;
+const renderValidate = () => <ValidateTabPanel />;
 const renderCode = () => <CodePanel />;
 const renderSimulate = () => <SimulateTabPanel />;
 const renderOutput = () => <OutputPanel />;
@@ -145,6 +162,7 @@ export function CircuitPage() {
 function CircuitWorkspace() {
   const { resolvedTheme } = useTheme();
   const { settings } = useAppSettings();
+  const { fitView } = useReactFlow();
 
   // First launch opens the example template; after that the user's own circuit
   // is restored from session storage (an empty board persists once seeded).
@@ -180,6 +198,20 @@ function CircuitWorkspace() {
   const [envError, setEnvError] = useState<string | null>(null);
   const [envLog, setEnvLog] = useState<string[]>([]);
 
+  // Automated design is always backed by Quiver. Browser builds retain the
+  // form for inspection but cannot execute a design search.
+  const [designRequest, setDesignRequest] = useState<DesignRequest>(
+    DEFAULT_DESIGN_REQUEST,
+  );
+  const [designState, setDesignState] = useState<DesignRunState>("idle");
+  const [designProgress, setDesignProgress] = useState<string[]>([]);
+  const [designError, setDesignError] = useState<string | null>(null);
+  const [designPortfolio, setDesignPortfolio] =
+    useState<DesignPortfolio | null>(null);
+  const [adoptedCandidateId, setAdoptedCandidateId] = useState<string | null>(
+    null,
+  );
+
   // The most recent run's experiment manifest, captured from the diverted
   // display artifact; the "Save to Flapjack" action persists it to the store.
   const [manifest, setManifest] = useState<ExperimentManifest | null>(null);
@@ -210,6 +242,9 @@ function CircuitWorkspace() {
   const envRootRef = useRef<string | null>(null);
   const envPromiseRef = useRef<Promise<string | null> | null>(null);
   const dockApiRef = useRef<DockviewApi | null>(null);
+  const preAdoptionDocumentRef = useRef<ReturnType<
+    typeof documentFromFlow
+  > | null>(null);
 
   const nodesById = useMemo(() => {
     const map = new Map<string, AppNode>();
@@ -256,6 +291,100 @@ function CircuitWorkspace() {
   useEffect(() => {
     storeDocument(document);
   }, [document]);
+
+  const updateDesignRequest = useCallback((patch: Partial<DesignRequest>) => {
+    setDesignRequest((current) => ({ ...current, ...patch }));
+  }, []);
+
+  const appendDesignProgress = useCallback((message: string) => {
+    setDesignProgress((current) => {
+      if (current[current.length - 1] === message) {
+        return current;
+      }
+      return [...current.slice(-7), message];
+    });
+    if (message.startsWith("Training Quiver")) {
+      setDesignState("running");
+    }
+  }, []);
+
+  const runDesign = useCallback(async () => {
+    if (designState === "preparing" || designState === "running") {
+      return;
+    }
+    setDesignError(null);
+    setDesignProgress([]);
+    setDesignPortfolio(null);
+    setDesignState("preparing");
+    try {
+      const portfolio = await runQuiverDesign(
+        designRequest,
+        appendDesignProgress,
+      );
+      setDesignPortfolio(portfolio);
+      setDesignState("complete");
+    } catch (error) {
+      setDesignError(
+        error instanceof Error ? error.message : "Design search failed.",
+      );
+      setDesignState("error");
+    }
+  }, [appendDesignProgress, designRequest, designState]);
+
+  const refitCanvas = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        void fitView({ duration: 180, maxZoom: 1, padding: 0.2 });
+      });
+    });
+  }, [fitView]);
+
+  const adoptDesign = useCallback(
+    (candidate: DesignCandidate) => {
+      preAdoptionDocumentRef.current = document;
+      const next = documentFromGrnWire(candidate.design, simulation);
+      const assignmentByNode = new Map(
+        candidate.assignments.map((assignment) => [
+          assignment.nodeId,
+          assignment,
+        ]),
+      );
+      const grounded = {
+        ...next,
+        nodes: next.nodes.map((node) => {
+          const assignment = assignmentByNode.get(node.id);
+          return assignment
+            ? {
+                ...node,
+                componentId: assignment.part.iri,
+                sbolParts: [assignment.part],
+              }
+            : node;
+        }),
+      };
+      setNodes(toFlowNodes(grounded));
+      setEdges(toFlowEdges(next));
+      setSimulation(next.simulation);
+      setSelectedId(null);
+      setAdoptedCandidateId(candidate.id);
+      refitCanvas();
+    },
+    [document, refitCanvas, setEdges, setNodes, simulation],
+  );
+
+  const undoDesignAdoption = useCallback(() => {
+    const previous = preAdoptionDocumentRef.current;
+    if (!previous) {
+      return;
+    }
+    setNodes(toFlowNodes(previous));
+    setEdges(toFlowEdges(previous));
+    setSimulation(previous.simulation);
+    setSelectedId(null);
+    preAdoptionDocumentRef.current = null;
+    setAdoptedCandidateId(null);
+    refitCanvas();
+  }, [refitCanvas, setEdges, setNodes]);
 
   const isValidConnection = useCallback(
     (connection: Connection | AppEdge) =>
@@ -426,6 +555,8 @@ function CircuitWorkspace() {
     setEdges(toFlowEdges(doc));
     setSimulation(doc.simulation);
     setSelectedId(null);
+    preAdoptionDocumentRef.current = null;
+    setAdoptedCandidateId(null);
     setFilePath(null);
     storePath(null);
     setSavedSnapshot(serializeDocument(doc));
@@ -444,6 +575,8 @@ function CircuitWorkspace() {
     setEdges(toFlowEdges(doc));
     setSimulation(doc.simulation);
     setSelectedId(null);
+    preAdoptionDocumentRef.current = null;
+    setAdoptedCandidateId(null);
     setFilePath(selected);
     storePath(selected);
     setSavedSnapshot(serializeDocument(doc));
@@ -754,6 +887,22 @@ function CircuitWorkspace() {
     });
     api.addPanel<CircuitDockPanelParams>({
       component: "circuitPanel",
+      id: DESIGN_PANEL_ID,
+      params: { kind: "design", render: renderDesign },
+      position: { direction: "within", referencePanel: node },
+      tabComponent: "circuitTab",
+      title: "Design",
+    });
+    api.addPanel<CircuitDockPanelParams>({
+      component: "circuitPanel",
+      id: VALIDATE_PANEL_ID,
+      params: { kind: "validate", render: renderValidate },
+      position: { direction: "within", referencePanel: node },
+      tabComponent: "circuitTab",
+      title: "Validate",
+    });
+    api.addPanel<CircuitDockPanelParams>({
+      component: "circuitPanel",
       id: CODE_PANEL_ID,
       params: { kind: "code", render: renderCode },
       position: { direction: "within", referencePanel: node },
@@ -782,12 +931,18 @@ function CircuitWorkspace() {
       // the code is readable without a manual resize on every switch.
       if (
         panel.id === NODE_PANEL_ID ||
+        panel.id === DESIGN_PANEL_ID ||
+        panel.id === VALIDATE_PANEL_ID ||
         panel.id === CODE_PANEL_ID ||
         panel.id === SIMULATE_PANEL_ID
       ) {
         panel.group.api.setSize({
           width:
-            panel.id === CODE_PANEL_ID ? CODE_GROUP_WIDTH : TOOL_GROUP_WIDTH,
+            panel.id === CODE_PANEL_ID
+              ? CODE_GROUP_WIDTH
+              : panel.id === DESIGN_PANEL_ID || panel.id === VALIDATE_PANEL_ID
+                ? DESIGN_GROUP_WIDTH
+                : TOOL_GROUP_WIDTH,
         });
       }
     });
@@ -803,7 +958,10 @@ function CircuitWorkspace() {
   const contextValue = useMemo<CircuitPageContextValue>(
     () => ({
       addNode,
+      adoptDesign,
+      adoptedCandidateId,
       applyNodeCode,
+      canUndoDesignAdoption: preAdoptionDocumentRef.current !== null,
       changeInputCount: (count) =>
         selectedNodeId && changeInputCount(selectedNodeId, count),
       changeNodeParam: (key, value) =>
@@ -813,6 +971,11 @@ function CircuitWorkspace() {
       circuitName: filePath ? baseName(filePath) : "Untitled circuit",
       deleteSelectedNode: () => selectedNodeId && deleteNode(selectedNodeId),
       dirty,
+      designError,
+      designPortfolio,
+      designProgress,
+      designRequest,
+      designState,
       document,
       edges,
       envError,
@@ -838,6 +1001,7 @@ function CircuitWorkspace() {
         selectedNodeId && replaceNodeFromCode(selectedNodeId, patch),
       resolvedTheme,
       retryEnv: () => void ensureEnv(),
+      runDesign: () => void runDesign(),
       runLines,
       runSimulation: () => void handleRun(),
       running,
@@ -855,14 +1019,23 @@ function CircuitWorkspace() {
       selectedNode: selectedDomainNode,
       simulation,
       textEditorSettings: settings.textEditor,
+      undoDesignAdoption,
+      updateDesignRequest,
       updateSimulation,
     }),
     [
       addNode,
+      adoptDesign,
+      adoptedCandidateId,
       applyNodeCode,
       changeInputCount,
       deleteNode,
       dirty,
+      designError,
+      designPortfolio,
+      designProgress,
+      designRequest,
+      designState,
       document,
       edges,
       ensureEnv,
@@ -887,6 +1060,7 @@ function CircuitWorkspace() {
       placeNode,
       replaceNodeFromCode,
       resolvedTheme,
+      runDesign,
       runLines,
       running,
       saveError,
@@ -903,6 +1077,8 @@ function CircuitWorkspace() {
       selectedNodeId,
       settings.textEditor,
       simulation,
+      undoDesignAdoption,
+      updateDesignRequest,
       updateNodeData,
       updateNodeParam,
       updateSimulation,
@@ -998,6 +1174,37 @@ function CodePanel() {
         textEditorSettings={page.textEditorSettings}
         value={page.generatedScript}
       />
+    </div>
+  );
+}
+
+function DesignTabPanel() {
+  const page = useCircuitPage();
+  return (
+    <div className="min-h-0 overflow-auto">
+      <DesignPanel
+        adoptedCandidateId={page.adoptedCandidateId}
+        canUndoAdoption={page.canUndoDesignAdoption}
+        desktopAvailable={isTauriRuntime()}
+        error={page.designError}
+        onAdopt={page.adoptDesign}
+        onRequestChange={page.updateDesignRequest}
+        onRun={page.runDesign}
+        onUndoAdoption={page.undoDesignAdoption}
+        portfolio={page.designPortfolio}
+        progress={page.designProgress}
+        request={page.designRequest}
+        state={page.designState}
+      />
+    </div>
+  );
+}
+
+function ValidateTabPanel() {
+  const page = useCircuitPage();
+  return (
+    <div className="min-h-0 overflow-auto">
+      <ValidationPanel document={page.document} />
     </div>
   );
 }
