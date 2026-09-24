@@ -27,6 +27,8 @@ function desktopOnlyError() {
   );
 }
 
+export const SBOL_DATA_CHANGED_EVENT = "gg:sbol-data-changed";
+
 export function loadOverview() {
   if (!isTauriRuntime()) {
     return desktopOnlyError();
@@ -194,7 +196,7 @@ export function loadSqlSchema() {
   return invoke<Schema>("data_schema_sql");
 }
 
-export function importDocument(options: {
+export async function importDocument(options: {
   body: string;
   description?: string | null;
   format: string;
@@ -205,11 +207,13 @@ export function importDocument(options: {
     return desktopOnlyError();
   }
 
-  return invoke<ImportReport>("data_import", {
+  const report = await invoke<ImportReport>("data_import", {
     body: options.body,
     description: options.description ?? null,
     format: options.format,
     name: options.name ?? null,
     sourceUri: options.sourceUri ?? null,
   });
+  window.dispatchEvent(new Event(SBOL_DATA_CHANGED_EVENT));
+  return report;
 }
