@@ -1,4 +1,9 @@
-use std::{fs, io::Read, path::Path};
+use std::{
+    collections::BTreeSet,
+    fs,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use sha2::Digest;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -47,12 +52,16 @@ where
         )?;
 
         let attachment_sources = referenced_attachments(request.app_data_dir)?;
-        let mut attachments = Vec::with_capacity(attachment_sources.len());
+        let mut attachments =
+            Vec::with_capacity(attachment_sources.len() + request.additional_files.len());
+        let mut logical_paths = BTreeSet::from([database_entry.logical_path.clone()]);
         for attachment in attachment_sources {
             let attachment_path = request.app_data_dir.join(&attachment.relative_path);
             if !attachment_path.is_file() {
                 return Err(BackupError::MissingAttachment(attachment.relative_path));
             }
+
+            insert_logical_path(&mut logical_paths, &attachment.relative_path)?;
 
             let entry = self.store_artifact(
                 request.master_key,
@@ -60,6 +69,20 @@ where
                 &attachment.relative_path,
             )?;
             attachments.push(entry);
+        }
+
+        for additional_file in request.additional_files {
+            let logical_path = normalize_relative_path(&additional_file.logical_path)?;
+            if !additional_file.source_path.is_file() {
+                return Err(BackupError::MissingAttachment(logical_path));
+            }
+            insert_logical_path(&mut logical_paths, &logical_path)?;
+
+            attachments.push(self.store_artifact(
+                request.master_key,
+                &additional_file.source_path,
+                &logical_path,
+            )?);
         }
 
         let mut objects = Vec::with_capacity(attachments.len() + 1);
@@ -160,6 +183,22 @@ where
             ));
         }
 
+        let attachment_paths = manifest
+            .attachments
+            .iter()
+            .map(|attachment| attachment.logical_path.as_str())
+            .collect::<BTreeSet<_>>();
+        let missing_data_stores = [("sbol.sqlite3", "SBOL"), ("flapjack.sqlite3", "Flapjack")]
+            .into_iter()
+            .filter_map(|(path, label)| (!attachment_paths.contains(path)).then_some(label))
+            .collect::<Vec<_>>();
+        if !missing_data_stores.is_empty() {
+            warnings.push(format!(
+                "This snapshot predates full-state backups and does not include {} data. Those areas will start empty after restore.",
+                missing_data_stores.join(" or ")
+            ));
+        }
+
         Ok(BackupRestorePlan {
             snapshot,
             required_bytes,
@@ -211,6 +250,12 @@ where
                     expected: attachment.sha256.clone(),
                     path: attachment.logical_path.clone(),
                 });
+            }
+            if staged_attachment
+                .extension()
+                .is_some_and(|value| value == "sqlite3")
+            {
+                sqlite_integrity_check(&staged_attachment)?;
             }
         }
 
@@ -355,6 +400,7 @@ where
 }
 
 pub struct BackupCreateRequest<'a> {
+    pub additional_files: Vec<BackupFileSource>,
     pub app_data_dir: &'a Path,
     pub app_version: String,
     pub database_snapshot_path: &'a Path,
@@ -363,6 +409,11 @@ pub struct BackupCreateRequest<'a> {
     pub manual: bool,
     pub master_key: &'a [u8],
     pub schema_version: i64,
+}
+
+pub struct BackupFileSource {
+    pub logical_path: String,
+    pub source_path: PathBuf,
 }
 
 pub struct BackupRestoreRequest<'a> {
@@ -386,6 +437,16 @@ fn object_entry_from_file_entry(entry: &BackupFileEntry) -> BackupObjectEntry {
         sha256: entry.sha256.clone(),
         size_bytes: entry.size_bytes,
     }
+}
+
+fn insert_logical_path(paths: &mut BTreeSet<String>, logical_path: &str) -> BackupResult<()> {
+    if paths.insert(logical_path.to_string()) {
+        return Ok(());
+    }
+
+    Err(BackupError::store(format!(
+        "backup contains duplicate path: {logical_path}"
+    )))
 }
 
 fn manifest_key(snapshot_id: &str) -> String {
@@ -444,15 +505,17 @@ mod tests {
 
     use crate::{
         generate_master_key, stores::FileSystemBackupStore, BackupCreateRequest, BackupEngine,
-        BackupRestoreRequest,
+        BackupFileSource, BackupRestoreRequest,
     };
 
     #[test]
-    fn local_backup_restores_database_and_attachment() {
+    fn local_backup_restores_all_databases_and_skills() {
         let app_data = tempfile::tempdir().unwrap();
         let backup_root = tempfile::tempdir().unwrap();
         let snapshot_database_path = app_data.path().join("snapshot.sqlite3");
         let live_database_path = app_data.path().join("gg.sqlite3");
+        let sbol_database_path = app_data.path().join("sbol.snapshot.sqlite3");
+        let flapjack_database_path = app_data.path().join("flapjack.snapshot.sqlite3");
         let skill_dir = app_data.path().join("skills").join("circuit-style");
         fs::create_dir_all(&skill_dir).unwrap();
         fs::write(skill_dir.join("SKILL.md"), b"Keep circuits modular.").unwrap();
@@ -467,12 +530,30 @@ mod tests {
                 params![snapshot_database_path.to_string_lossy().as_ref()],
             )
             .unwrap();
+        Connection::open(&sbol_database_path)
+            .unwrap()
+            .execute_batch("CREATE TABLE sbol_objects (iri TEXT);")
+            .unwrap();
+        Connection::open(&flapjack_database_path)
+            .unwrap()
+            .execute_batch("CREATE TABLE study (name TEXT);")
+            .unwrap();
 
         let key = generate_master_key();
         let store = FileSystemBackupStore::new(backup_root.path());
         let engine = BackupEngine::new(store);
         let summary = engine
             .create_snapshot(BackupCreateRequest {
+                additional_files: vec![
+                    BackupFileSource {
+                        logical_path: "sbol.sqlite3".to_string(),
+                        source_path: sbol_database_path,
+                    },
+                    BackupFileSource {
+                        logical_path: "flapjack.sqlite3".to_string(),
+                        source_path: flapjack_database_path,
+                    },
+                ],
                 app_data_dir: app_data.path(),
                 app_version: "0.1.0".to_string(),
                 database_snapshot_path: &snapshot_database_path,
@@ -497,7 +578,19 @@ mod tests {
             )
             .unwrap();
 
+        assert!(engine
+            .restore_plan(BackupRestoreRequest {
+                current_schema_version: 1,
+                master_key: &key,
+                snapshot_id: &summary.id,
+            })
+            .unwrap()
+            .warnings
+            .is_empty());
+
         assert!(staging.join("gg.sqlite3").is_file());
+        assert!(staging.join("sbol.sqlite3").is_file());
+        assert!(staging.join("flapjack.sqlite3").is_file());
         assert_eq!(
             fs::read(staging.join("skills/circuit-style/SKILL.md")).unwrap(),
             b"Keep circuits modular."
@@ -527,6 +620,7 @@ mod tests {
         let engine = BackupEngine::new(store.clone());
         let summary = engine
             .create_snapshot(BackupCreateRequest {
+                additional_files: Vec::new(),
                 app_data_dir: app_data.path(),
                 app_version: "0.1.0".to_string(),
                 database_snapshot_path: &snapshot_database_path,

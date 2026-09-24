@@ -1,22 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  chooseBackupRecoveryKeyPath,
   chooseLocalBackupFolder,
+  choosePortableBackupFolder,
   chooseRecoveryKeyExportPath,
   createLocalBackup,
   executeLocalBackupRestore,
+  executePortableBackupRestore,
   exportBackupRecoveryKey,
   getBackupErrorMessage,
   listBackupActivity,
   listLocalBackups,
+  listPortableBackups,
   loadBackupKeyStatus,
   loadBackupTaskStatus,
   planLocalBackupRestore,
+  planPortableBackupRestore,
 } from "@/features/backup/backup-service";
 import type {
   BackupActivityEntry,
   BackupKeyStatus,
   BackupRestoreExecuteResult,
+  BackupRestorePlan,
   BackupSnapshotSummary,
   BackupTaskStatus,
 } from "@/features/backup/backup.types";
@@ -82,6 +88,7 @@ export function BackupSettingsSection() {
   );
   const [restoreSnapshot, setRestoreSnapshot] =
     useState<BackupSnapshotSummary | null>(null);
+  const [portableRestoreOpen, setPortableRestoreOpen] = useState(false);
   const backupSettings = settings.backup;
   const localFolder = backupSettings.localFolder;
   const busy = action !== null;
@@ -254,6 +261,16 @@ export function BackupSettingsSection() {
               <RotateCcw aria-hidden="true" size={13} strokeWidth={1.8} />
             )}
             Refresh
+          </Button>
+          <Button
+            className={compactButtonClassName}
+            disabled={busy}
+            onClick={() => setPortableRestoreOpen(true)}
+            size="none"
+            variant="ghost"
+          >
+            <FolderOpen aria-hidden="true" size={13} strokeWidth={1.8} />
+            Restore…
           </Button>
           <Button
             className={compactButtonClassName}
@@ -501,6 +518,15 @@ export function BackupSettingsSection() {
           snapshot={restoreSnapshot}
         />
       ) : null}
+
+      {portableRestoreOpen ? (
+        <PortableRestoreDialog
+          onClose={() => setPortableRestoreOpen(false)}
+          onRestoreStaged={() => {
+            void handleRefresh();
+          }}
+        />
+      ) : null}
     </section>
   );
 }
@@ -591,6 +617,443 @@ function ActivityRow({ entry }: { entry: BackupActivityEntry }) {
       </span>
     </div>
   );
+}
+
+type PortableRestoreAction =
+  | "folder"
+  | "key"
+  | "load"
+  | "plan"
+  | "stage"
+  | null;
+
+function PortableRestoreDialog({
+  onClose,
+  onRestoreStaged,
+}: {
+  onClose: () => void;
+  onRestoreStaged: () => void;
+}) {
+  const [sourcePath, setSourcePath] = useState<string | null>(null);
+  const [recoveryKeyPath, setRecoveryKeyPath] = useState<string | null>(null);
+  const [snapshots, setSnapshots] = useState<BackupSnapshotSummary[]>([]);
+  const [selectedSnapshot, setSelectedSnapshot] =
+    useState<BackupSnapshotSummary | null>(null);
+  const [plan, setPlan] = useState<BackupRestorePlan | null>(null);
+  const [result, setResult] = useState<BackupRestoreExecuteResult | null>(null);
+  const [action, setAction] = useState<PortableRestoreAction>(null);
+  const [error, setError] = useState<string | null>(null);
+  const busy = action !== null;
+  const canLoad = Boolean(sourcePath && recoveryKeyPath);
+
+  function resetLoadedBackup() {
+    setSnapshots([]);
+    setSelectedSnapshot(null);
+    setPlan(null);
+    setResult(null);
+    setError(null);
+  }
+
+  async function handleChooseSource() {
+    setAction("folder");
+    setError(null);
+    try {
+      const selected = await choosePortableBackupFolder();
+      if (selected) {
+        setSourcePath(selected);
+        resetLoadedBackup();
+      }
+    } catch (error) {
+      setError(getBackupErrorMessage(error));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function handleChooseRecoveryKey() {
+    setAction("key");
+    setError(null);
+    try {
+      const selected = await chooseBackupRecoveryKeyPath();
+      if (selected) {
+        setRecoveryKeyPath(selected);
+        resetLoadedBackup();
+      }
+    } catch (error) {
+      setError(getBackupErrorMessage(error));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function loadPlan(snapshot: BackupSnapshotSummary) {
+    if (!sourcePath || !recoveryKeyPath) {
+      return;
+    }
+
+    setSelectedSnapshot(snapshot);
+    setPlan(null);
+    setResult(null);
+    setAction("plan");
+    setError(null);
+    try {
+      setPlan(
+        await planPortableBackupRestore(
+          sourcePath,
+          recoveryKeyPath,
+          snapshot.id,
+        ),
+      );
+    } catch (error) {
+      setError(getBackupErrorMessage(error));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function handleLoadBackup() {
+    if (!sourcePath || !recoveryKeyPath) {
+      return;
+    }
+
+    setAction("load");
+    setError(null);
+    setSnapshots([]);
+    setSelectedSnapshot(null);
+    setPlan(null);
+    setResult(null);
+    try {
+      const loadedSnapshots = await listPortableBackups(
+        sourcePath,
+        recoveryKeyPath,
+      );
+      setSnapshots(loadedSnapshots);
+      const snapshot = loadedSnapshots[0];
+      if (snapshot) {
+        setSelectedSnapshot(snapshot);
+        setPlan(
+          await planPortableBackupRestore(
+            sourcePath,
+            recoveryKeyPath,
+            snapshot.id,
+          ),
+        );
+      }
+    } catch (error) {
+      setError(getBackupErrorMessage(error));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function handleStageRestore() {
+    if (!sourcePath || !recoveryKeyPath || !selectedSnapshot) {
+      return;
+    }
+
+    setAction("stage");
+    setError(null);
+    try {
+      const output = await executePortableBackupRestore(
+        sourcePath,
+        recoveryKeyPath,
+        selectedSnapshot.id,
+      );
+      setResult(output);
+      onRestoreStaged();
+    } catch (error) {
+      setError(getBackupErrorMessage(error));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4"
+      role="dialog"
+    >
+      <div className="grid max-h-[min(680px,calc(100vh-32px))] w-[min(620px,calc(100vw-32px))] min-w-0 gap-3 overflow-auto rounded-[8px] border border-cg-border bg-cg-surface p-3 shadow-xl">
+        <header className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 border-b border-cg-border pb-2">
+          <div className="min-w-0">
+            <h3 className="m-0 text-[14px] font-bold leading-tight text-cg-fg">
+              Restore from Backup
+            </h3>
+            <div className="mt-1 text-[11px] font-semibold leading-snug text-cg-muted">
+              Browse to an exported backup and its separately stored recovery
+              key.
+            </div>
+          </div>
+          <Button
+            aria-label="Close portable restore dialog"
+            className="size-7 rounded-[6px] p-0"
+            disabled={busy}
+            onClick={onClose}
+            size="none"
+            variant="ghost"
+          >
+            <X aria-hidden="true" size={14} strokeWidth={1.8} />
+          </Button>
+        </header>
+
+        <div className={settingsListClassName}>
+          <PortableSourceRow
+            action={action}
+            actionName="folder"
+            icon="folder"
+            label="Backup directory"
+            onChoose={handleChooseSource}
+            path={sourcePath}
+          />
+          <PortableSourceRow
+            action={action}
+            actionName="key"
+            icon="key"
+            label="Recovery key"
+            onChoose={handleChooseRecoveryKey}
+            path={recoveryKeyPath}
+          />
+        </div>
+
+        <div className="rounded-[7px] border border-cg-border bg-cg-editor px-2.5 py-2 text-[11.5px] leading-snug text-cg-muted">
+          Restoring imports GG databases, skills, and database-backed settings,
+          including MCP configuration. This device keeps its backup destination,
+          account identity, workspace list, and OS-keychain secrets. External
+          project folders are not part of a backup. Current app data is moved
+          aside before the restore is installed.
+        </div>
+
+        {snapshots.length > 0 ? (
+          <div className="grid min-w-0 gap-1.5">
+            <h4 className="m-0 text-[12px] font-bold leading-tight text-cg-fg">
+              Snapshot
+            </h4>
+            <div className="grid min-w-0 overflow-hidden rounded-[7px] border border-cg-border bg-cg-surface">
+              {snapshots.map((snapshot) => {
+                const selected = selectedSnapshot?.id === snapshot.id;
+                return (
+                  <button
+                    aria-pressed={selected}
+                    className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-0 border-b border-solid border-cg-border bg-transparent px-2.5 py-2 text-left font-[inherit] last:border-b-0 hover:bg-cg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-cg-focus ${selected ? "bg-cg-surface-hover" : ""}`}
+                    disabled={busy || Boolean(result)}
+                    key={snapshot.id}
+                    onClick={() => void loadPlan(snapshot)}
+                    type="button"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[11.5px] font-bold leading-tight text-cg-fg">
+                        {formatDate(snapshot.createdAt)}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[10.5px] font-semibold leading-tight text-cg-muted">
+                        {snapshot.deviceName} ·{" "}
+                        {formatBytes(snapshot.totalBytes)}
+                        {" · "}schema {snapshot.schemaVersion} ·{" "}
+                        {formatSnapshotType(snapshot)}
+                      </span>
+                    </span>
+                    <span className="text-[10.5px] font-bold text-cg-muted">
+                      {selected ? "Selected" : "Select"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {busy && action !== "folder" && action !== "key" ? (
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-cg-muted">
+            <LoaderCircle
+              aria-hidden="true"
+              className="animate-spin motion-reduce:animate-none"
+              size={14}
+              strokeWidth={1.8}
+            />
+            {formatPortableRestoreAction(action)}
+          </div>
+        ) : null}
+
+        {plan ? (
+          <div className="grid gap-2 text-[12px] leading-snug text-cg-fg">
+            <div className="grid grid-cols-2 gap-2 [@container(max-width:420px)]:grid-cols-1">
+              <PlanMetric label="Objects" value={String(plan.objectCount)} />
+              <PlanMetric
+                label="Size"
+                value={formatBytes(plan.requiredBytes)}
+              />
+              <PlanMetric
+                label="Schema"
+                value={String(plan.snapshot.schemaVersion)}
+              />
+              <PlanMetric
+                label="Attachments"
+                value={String(plan.snapshot.attachmentCount)}
+              />
+            </div>
+            {plan.warnings.map((warning) => (
+              <div
+                className="rounded-[6px] border border-cg-warning/35 bg-cg-warning/10 px-2 py-1.5 text-[11.5px] leading-snug text-cg-fg"
+                key={warning}
+              >
+                {warning}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {result ? (
+          <div className="flex min-w-0 items-start gap-2 rounded-[7px] border border-cg-success/35 bg-cg-success/10 px-2.5 py-2 text-[11.5px] leading-snug text-cg-success">
+            <CheckCircle2
+              aria-hidden="true"
+              className="mt-0.5 flex-none"
+              size={14}
+              strokeWidth={1.8}
+            />
+            <span className="min-w-0">
+              Restore staged. Restart GG Circuit to install it.
+            </span>
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="flex min-w-0 items-start gap-2 rounded-[7px] border border-cg-danger/35 bg-cg-danger/10 px-2.5 py-2 text-[11.5px] leading-snug text-cg-danger">
+            <AlertCircle
+              aria-hidden="true"
+              className="mt-0.5 flex-none"
+              size={14}
+              strokeWidth={1.8}
+            />
+            <span className="min-w-0">{error}</span>
+          </div>
+        ) : null}
+
+        <footer className="flex min-w-0 justify-end gap-2">
+          <Button
+            className={compactButtonClassName}
+            disabled={busy}
+            onClick={onClose}
+            size="none"
+            variant="ghost"
+          >
+            {result ? "Close" : "Cancel"}
+          </Button>
+          {!result && snapshots.length === 0 ? (
+            <Button
+              className={compactButtonClassName}
+              disabled={busy || !canLoad}
+              onClick={handleLoadBackup}
+              size="none"
+              variant="default"
+            >
+              {action === "load" ? (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="animate-spin motion-reduce:animate-none"
+                  size={13}
+                  strokeWidth={1.8}
+                />
+              ) : (
+                <FolderOpen aria-hidden="true" size={13} strokeWidth={1.8} />
+              )}
+              Load Backup
+            </Button>
+          ) : null}
+          {!result && snapshots.length > 0 ? (
+            <Button
+              className={compactButtonClassName}
+              disabled={busy || !plan || !selectedSnapshot}
+              onClick={handleStageRestore}
+              size="none"
+              variant="default"
+            >
+              {action === "stage" ? (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="animate-spin motion-reduce:animate-none"
+                  size={13}
+                  strokeWidth={1.8}
+                />
+              ) : (
+                <RotateCcw aria-hidden="true" size={13} strokeWidth={1.8} />
+              )}
+              Stage Restore
+            </Button>
+          ) : null}
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function PortableSourceRow({
+  action,
+  actionName,
+  icon,
+  label,
+  onChoose,
+  path,
+}: {
+  action: PortableRestoreAction;
+  actionName: "folder" | "key";
+  icon: "folder" | "key";
+  label: string;
+  onChoose: () => void;
+  path: string | null;
+}) {
+  return (
+    <div className={settingsRowClassName}>
+      <div className={settingsLabelClassName}>
+        {icon === "folder" ? (
+          <FolderOpen aria-hidden="true" size={15} strokeWidth={1.8} />
+        ) : (
+          <KeyRound aria-hidden="true" size={15} strokeWidth={1.8} />
+        )}
+        <span>{label}</span>
+      </div>
+      <div
+        className={path ? detailClassName : mutedDetailClassName}
+        title={path ?? undefined}
+      >
+        {path ?? "Not selected"}
+      </div>
+      <Button
+        aria-label={`Browse for ${label.toLowerCase()}`}
+        className={compactButtonClassName}
+        disabled={action !== null}
+        onClick={onChoose}
+        size="none"
+        variant="ghost"
+      >
+        {action === actionName ? (
+          <LoaderCircle
+            aria-hidden="true"
+            className="animate-spin motion-reduce:animate-none"
+            size={13}
+            strokeWidth={1.8}
+          />
+        ) : icon === "folder" ? (
+          <FolderOpen aria-hidden="true" size={13} strokeWidth={1.8} />
+        ) : (
+          <KeyRound aria-hidden="true" size={13} strokeWidth={1.8} />
+        )}
+        Browse
+      </Button>
+    </div>
+  );
+}
+
+function formatPortableRestoreAction(action: PortableRestoreAction) {
+  if (action === "load") {
+    return "Reading backup";
+  }
+  if (action === "plan") {
+    return "Verifying snapshot";
+  }
+  if (action === "stage") {
+    return "Staging restore";
+  }
+  return "Working";
 }
 
 function RestoreDialog({

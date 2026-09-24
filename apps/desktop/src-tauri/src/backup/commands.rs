@@ -7,10 +7,10 @@ use std::{
 };
 
 use gg_backup::{
-    generate_master_key, install_staged_restore, master_key_from_recovery_key,
-    recovery_key_for_master_key, stores::FileSystemBackupStore, BackupCreateRequest, BackupEngine,
-    BackupMasterKey, BackupRestorePlan, BackupRestoreRequest, BackupRetentionPlan,
-    BackupRetentionPolicy,
+    create_sqlite_snapshot, generate_master_key, install_staged_restore,
+    master_key_from_recovery_key, recovery_key_for_master_key, stores::FileSystemBackupStore,
+    BackupCreateRequest, BackupEngine, BackupFileSource, BackupMasterKey, BackupRestorePlan,
+    BackupRestoreRequest, BackupRetentionPlan, BackupRetentionPolicy,
 };
 use gg_data::backup::{BackupActivityEntry, BackupActivityInput};
 use gg_data::{
@@ -183,78 +183,80 @@ pub fn backup_local_restore_execute(
     task_state: State<'_, BackupTaskState>,
     snapshot_id: String,
 ) -> Result<BackupRestoreExecuteResult, String> {
-    let _operation = acquire_operation(&task_state)?;
+    let master_key = read_master_key(&*secret_store)?
+        .ok_or_else(|| "No local backup encryption key exists.".to_string())?;
+    mark_backup_master_key_present(&database)?;
+    let (backup_root, _, _) = backup_context(&app, &database)?;
+    execute_restore(
+        &app,
+        database.inner(),
+        task_state.inner(),
+        backup_root,
+        master_key,
+        snapshot_id,
+        false,
+    )
+}
 
-    set_task_status(
-        &task_state,
-        BackupTaskStatus {
-            state: "restoring".to_string(),
-            snapshot_id: Some(snapshot_id.clone()),
-            message: Some("Staging restore".to_string()),
-            started_at: Some(current_timestamp_millis_string()),
-            ..BackupTaskStatus::default()
-        },
-    )?;
+#[tauri::command]
+pub fn backup_portable_list(
+    source_path: String,
+    recovery_key_path: String,
+) -> Result<Vec<gg_backup::BackupSnapshotSummary>, String> {
+    let (backup_root, master_key) = portable_backup_context(&source_path, &recovery_key_path)?;
+    let snapshots = BackupEngine::new(FileSystemBackupStore::new(&backup_root))
+        .list_snapshots(&master_key)
+        .map_err(|error| error.to_string())?;
 
-    let status_snapshot_id = snapshot_id.clone();
-    let result: Result<BackupRestoreExecuteResult, String> = (|| {
-        let master_key = read_master_key(&*secret_store)?
-            .ok_or_else(|| "No local backup encryption key exists.".to_string())?;
-        mark_backup_master_key_present(&database)?;
-        let (backup_root, _, _) = backup_context(&app, &database)?;
-        let restore_id = format!("rst_{}", current_timestamp_millis_string());
-        let staging_path = backup_cache_dir(&app)?.join("restores").join(&restore_id);
-        let store = FileSystemBackupStore::new(backup_root);
-        let engine = BackupEngine::new(store);
-        engine
-            .restore_to_staging(
-                BackupRestoreRequest {
-                    current_schema_version: database.schema_version()?,
-                    master_key: &master_key,
-                    snapshot_id: &snapshot_id,
-                },
-                &staging_path,
-            )
-            .map_err(|error| error.to_string())?;
-
-        let journal = PendingRestoreJournal {
-            restore_id,
-            snapshot_id: snapshot_id.clone(),
-            staging_path: staging_path.clone(),
-            created_at: current_timestamp_millis_string(),
-        };
-        write_pending_restore_journal(&app, &journal)?;
-        Ok(BackupRestoreExecuteResult {
-            restart_required: true,
-            snapshot_id: snapshot_id.clone(),
-            staging_path: staging_path.to_string_lossy().to_string(),
-        })
-    })();
-
-    match &result {
-        Ok(output) => set_task_status(
-            &task_state,
-            BackupTaskStatus {
-                state: "restore_ready".to_string(),
-                snapshot_id: Some(output.snapshot_id.clone()),
-                message: Some("Restore staged; restart required".to_string()),
-                finished_at: Some(current_timestamp_millis_string()),
-                ..BackupTaskStatus::default()
-            },
-        )?,
-        Err(error) => set_task_status(
-            &task_state,
-            BackupTaskStatus {
-                state: "restore_failed".to_string(),
-                snapshot_id: Some(status_snapshot_id),
-                error: Some(error.clone()),
-                finished_at: Some(current_timestamp_millis_string()),
-                ..BackupTaskStatus::default()
-            },
-        )?,
+    if snapshots.is_empty() {
+        if backup_store_has_manifests(&backup_root)? {
+            return Err(
+                "The selected recovery key cannot decrypt any snapshots in this backup."
+                    .to_string(),
+            );
+        }
+        return Err("The selected directory contains no GG Circuit snapshots.".to_string());
     }
 
-    result
+    Ok(snapshots)
+}
+
+#[tauri::command]
+pub fn backup_portable_restore_plan(
+    database: State<'_, Database>,
+    source_path: String,
+    recovery_key_path: String,
+    snapshot_id: String,
+) -> Result<BackupRestorePlan, String> {
+    let (backup_root, master_key) = portable_backup_context(&source_path, &recovery_key_path)?;
+    BackupEngine::new(FileSystemBackupStore::new(backup_root))
+        .restore_plan(BackupRestoreRequest {
+            current_schema_version: database.schema_version()?,
+            master_key: &master_key,
+            snapshot_id: &snapshot_id,
+        })
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn backup_portable_restore_execute(
+    app: AppHandle,
+    database: State<'_, Database>,
+    task_state: State<'_, BackupTaskState>,
+    source_path: String,
+    recovery_key_path: String,
+    snapshot_id: String,
+) -> Result<BackupRestoreExecuteResult, String> {
+    let (backup_root, master_key) = portable_backup_context(&source_path, &recovery_key_path)?;
+    execute_restore(
+        &app,
+        database.inner(),
+        task_state.inner(),
+        backup_root,
+        master_key,
+        snapshot_id,
+        true,
+    )
 }
 
 #[tauri::command]
@@ -274,6 +276,97 @@ pub fn backup_activity_list(
     limit: Option<usize>,
 ) -> Result<Vec<BackupActivityEntry>, String> {
     database.list_backup_activity(limit.unwrap_or(8))
+}
+
+fn execute_restore(
+    app: &AppHandle,
+    database: &Database,
+    task_state: &BackupTaskState,
+    backup_root: PathBuf,
+    master_key: BackupMasterKey,
+    snapshot_id: String,
+    preserve_local_settings: bool,
+) -> Result<BackupRestoreExecuteResult, String> {
+    let _operation = acquire_operation(task_state)?;
+
+    set_task_status(
+        task_state,
+        BackupTaskStatus {
+            state: "restoring".to_string(),
+            snapshot_id: Some(snapshot_id.clone()),
+            message: Some("Staging restore".to_string()),
+            started_at: Some(current_timestamp_millis_string()),
+            ..BackupTaskStatus::default()
+        },
+    )?;
+
+    let status_snapshot_id = snapshot_id.clone();
+    let result: Result<BackupRestoreExecuteResult, String> = (|| {
+        let restore_id = format!("rst_{}", current_timestamp_millis_string());
+        let staging_path = backup_cache_dir(app)?.join("restores").join(&restore_id);
+        BackupEngine::new(FileSystemBackupStore::new(backup_root))
+            .restore_to_staging(
+                BackupRestoreRequest {
+                    current_schema_version: database.schema_version()?,
+                    master_key: &master_key,
+                    snapshot_id: &snapshot_id,
+                },
+                &staging_path,
+            )
+            .map_err(|error| error.to_string())?;
+
+        if preserve_local_settings {
+            preserve_install_locality(database, &staging_path)?;
+        }
+
+        let journal = PendingRestoreJournal {
+            restore_id,
+            snapshot_id: snapshot_id.clone(),
+            staging_path: staging_path.clone(),
+            created_at: current_timestamp_millis_string(),
+        };
+        write_pending_restore_journal(app, &journal)?;
+        Ok(BackupRestoreExecuteResult {
+            restart_required: true,
+            snapshot_id: snapshot_id.clone(),
+            staging_path: staging_path.to_string_lossy().to_string(),
+        })
+    })();
+
+    match &result {
+        Ok(output) => set_task_status(
+            task_state,
+            BackupTaskStatus {
+                state: "restore_ready".to_string(),
+                snapshot_id: Some(output.snapshot_id.clone()),
+                message: Some("Restore staged; restart required".to_string()),
+                finished_at: Some(current_timestamp_millis_string()),
+                ..BackupTaskStatus::default()
+            },
+        )?,
+        Err(error) => set_task_status(
+            task_state,
+            BackupTaskStatus {
+                state: "restore_failed".to_string(),
+                snapshot_id: Some(status_snapshot_id),
+                error: Some(error.clone()),
+                finished_at: Some(current_timestamp_millis_string()),
+                ..BackupTaskStatus::default()
+            },
+        )?,
+    }
+
+    result
+}
+
+fn preserve_install_locality(database: &Database, staging_path: &Path) -> Result<(), String> {
+    let local_settings = database.load_app_settings()?;
+    let staged_database = Database::open(staging_path.join("gg.sqlite3"))?;
+    let mut restored_settings = staged_database.load_app_settings()?;
+    restored_settings.backup = local_settings.backup;
+    restored_settings.platform = local_settings.platform;
+    restored_settings.workspace = local_settings.workspace;
+    staged_database.save_app_settings(&restored_settings)
 }
 
 pub fn apply_pending_restore(app_cache_dir: &Path, app_data_dir: &Path) -> Result<(), String> {
@@ -389,10 +482,29 @@ fn create_local_backup(
             .path()
             .app_data_dir()
             .map_err(|error| error.to_string())?;
+        let sbol_snapshot_path = work_dir.join("sbol.snapshot.sqlite3");
+        let flapjack_snapshot_path = work_dir.join("flapjack.snapshot.sqlite3");
+        create_sqlite_snapshot(&app_data_dir.join("sbol.sqlite3"), &sbol_snapshot_path)
+            .map_err(|error| error.to_string())?;
+        create_sqlite_snapshot(
+            &app_data_dir.join("flapjack.sqlite3"),
+            &flapjack_snapshot_path,
+        )
+        .map_err(|error| error.to_string())?;
         let store = FileSystemBackupStore::new(backup_root);
         let engine = BackupEngine::new(store);
         let summary = engine
             .create_snapshot(BackupCreateRequest {
+                additional_files: vec![
+                    BackupFileSource {
+                        logical_path: "sbol.sqlite3".to_string(),
+                        source_path: sbol_snapshot_path,
+                    },
+                    BackupFileSource {
+                        logical_path: "flapjack.sqlite3".to_string(),
+                        source_path: flapjack_snapshot_path,
+                    },
+                ],
                 app_data_dir: &app_data_dir,
                 app_version: env!("CARGO_PKG_VERSION").to_string(),
                 database_snapshot_path: &snapshot_database_path,
@@ -607,6 +719,64 @@ fn backup_context(
     ))
 }
 
+fn portable_backup_context(
+    source_path: &str,
+    recovery_key_path: &str,
+) -> Result<(PathBuf, BackupMasterKey), String> {
+    let backup_root = resolve_portable_backup_root(Path::new(source_path))?;
+    let recovery_key_path = Path::new(recovery_key_path);
+    if !recovery_key_path.is_file() {
+        return Err("Choose the recovery-key text file that belongs to this backup.".to_string());
+    }
+
+    let recovery_key = fs::read_to_string(recovery_key_path).map_err(|error| error.to_string())?;
+    let master_key =
+        master_key_from_recovery_key(&recovery_key).map_err(|error| error.to_string())?;
+    Ok((backup_root, master_key))
+}
+
+fn resolve_portable_backup_root(selected_path: &Path) -> Result<PathBuf, String> {
+    if !selected_path.is_dir() {
+        return Err("Choose a GG Circuit backup directory.".to_string());
+    }
+
+    let nested = selected_path.join("gg-backups");
+    let backup_root = if looks_like_backup_store(&nested) {
+        nested
+    } else if looks_like_backup_store(selected_path) {
+        selected_path.to_path_buf()
+    } else {
+        return Err(
+            "The selected directory is not a GG Circuit backup and does not contain gg-backups."
+                .to_string(),
+        );
+    };
+
+    backup_root
+        .canonicalize()
+        .map_err(|error| error.to_string())
+}
+
+fn looks_like_backup_store(path: &Path) -> bool {
+    path.join("snapshots").is_dir() || path.join("index.json").is_file()
+}
+
+fn backup_store_has_manifests(backup_root: &Path) -> Result<bool, String> {
+    let snapshots_path = backup_root.join("snapshots");
+    if !snapshots_path.is_dir() {
+        return Ok(false);
+    }
+
+    for entry in fs::read_dir(snapshots_path).map_err(|error| error.to_string())? {
+        let path = entry.map_err(|error| error.to_string())?.path();
+        if path.join("manifest.json.encrypted").is_file() {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 fn backup_work_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(backup_cache_dir(app)?
         .join("work")
@@ -756,6 +926,82 @@ fn default_device_name() -> String {
 mod tests {
     use super::*;
 
+    fn portable_fixture() -> (tempfile::TempDir, String, String) {
+        let directory = tempfile::tempdir().unwrap();
+        let backup_root = directory.path().join("gg-backups");
+        let app_data = tempfile::tempdir().unwrap();
+        let database = Database::open(app_data.path().join("gg.sqlite3")).unwrap();
+        let snapshot_database = app_data.path().join("gg.snapshot.sqlite3");
+        let mut donor_settings = database.load_app_settings().unwrap();
+        donor_settings.backup.local_folder = Some("/donor/backups".to_string());
+        donor_settings.platform.account_id = Some("donor-account".to_string());
+        donor_settings.text_editor.font_size = 19;
+        database.save_app_settings(&donor_settings).unwrap();
+        database.create_backup_snapshot(&snapshot_database).unwrap();
+
+        let sbol_database = Database::open(app_data.path().join("sbol.sqlite3")).unwrap();
+        let mut sbol_marker = sbol_database.load_app_settings().unwrap();
+        sbol_marker.text_editor.font_size = 17;
+        sbol_database.save_app_settings(&sbol_marker).unwrap();
+        let sbol_snapshot = app_data.path().join("sbol.snapshot.sqlite3");
+        sbol_database
+            .create_backup_snapshot(&sbol_snapshot)
+            .unwrap();
+
+        let flapjack_database = Database::open(app_data.path().join("flapjack.sqlite3")).unwrap();
+        let mut flapjack_marker = flapjack_database.load_app_settings().unwrap();
+        flapjack_marker.text_editor.font_size = 18;
+        flapjack_database
+            .save_app_settings(&flapjack_marker)
+            .unwrap();
+        let flapjack_snapshot = app_data.path().join("flapjack.snapshot.sqlite3");
+        flapjack_database
+            .create_backup_snapshot(&flapjack_snapshot)
+            .unwrap();
+
+        let skill_directory = app_data.path().join("skills").join("portable-test");
+        fs::create_dir_all(&skill_directory).unwrap();
+        fs::write(skill_directory.join("SKILL.md"), "portable skill").unwrap();
+
+        let master_key = generate_master_key();
+        BackupEngine::new(FileSystemBackupStore::new(&backup_root))
+            .create_snapshot(BackupCreateRequest {
+                additional_files: vec![
+                    BackupFileSource {
+                        logical_path: "sbol.sqlite3".to_string(),
+                        source_path: sbol_snapshot,
+                    },
+                    BackupFileSource {
+                        logical_path: "flapjack.sqlite3".to_string(),
+                        source_path: flapjack_snapshot,
+                    },
+                ],
+                app_data_dir: app_data.path(),
+                app_version: "0.1.0".to_string(),
+                database_snapshot_path: &snapshot_database,
+                device_id: "donor-device".to_string(),
+                device_name: "Donor Device".to_string(),
+                manual: true,
+                master_key: &master_key,
+                schema_version: database.schema_version().unwrap(),
+            })
+            .unwrap();
+
+        let recovery_key_path = directory.path().join("gg-recovery-key.txt");
+        let recovery_key = recovery_key_for_master_key(&master_key).unwrap();
+        fs::write(
+            &recovery_key_path,
+            recovery_key_file_contents(&recovery_key),
+        )
+        .unwrap();
+
+        (
+            directory,
+            backup_root.to_string_lossy().to_string(),
+            recovery_key_path.to_string_lossy().to_string(),
+        )
+    }
+
     fn scheduled_settings() -> AppSettings {
         let mut settings = AppSettings::default();
         settings.backup.local_folder = Some("/tmp/gg-backups".to_string());
@@ -769,6 +1015,183 @@ mod tests {
             .unwrap()
             .saturating_sub(elapsed_millis)
             .to_string()
+    }
+
+    #[test]
+    fn portable_restore_accepts_exported_or_store_directory() {
+        let (directory, backup_root, recovery_key_path) = portable_fixture();
+
+        let exported = backup_portable_list(
+            directory.path().to_string_lossy().to_string(),
+            recovery_key_path.clone(),
+        )
+        .unwrap();
+        let store = backup_portable_list(backup_root, recovery_key_path).unwrap();
+
+        assert_eq!(exported.len(), 1);
+        assert_eq!(store.len(), 1);
+        assert_eq!(exported[0].id, store[0].id);
+    }
+
+    #[test]
+    fn portable_restore_rejects_another_recovery_key() {
+        let (directory, _, recovery_key_path) = portable_fixture();
+        let other_key = recovery_key_for_master_key(&generate_master_key()).unwrap();
+        fs::write(&recovery_key_path, recovery_key_file_contents(&other_key)).unwrap();
+
+        let error = backup_portable_list(
+            directory.path().to_string_lossy().to_string(),
+            recovery_key_path,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("cannot decrypt"));
+    }
+
+    #[test]
+    fn portable_restore_preserves_recipient_locality() {
+        let current_directory = tempfile::tempdir().unwrap();
+        let current_database = Database::open(current_directory.path().join("gg.sqlite3")).unwrap();
+        let mut local_settings = current_database.load_app_settings().unwrap();
+        local_settings.backup.local_folder = Some("/recipient/backups".to_string());
+        local_settings.platform.account_id = Some("recipient-account".to_string());
+        local_settings.workspace = serde_json::from_value(serde_json::json!({
+            "activeWorkspaceId": "recipient-workspace",
+            "workspaces": [{
+                "id": "recipient-workspace",
+                "name": "Recipient",
+                "root": "/recipient/project",
+                "kind": "external",
+                "historyEnabled": false
+            }]
+        }))
+        .unwrap();
+        current_database.save_app_settings(&local_settings).unwrap();
+
+        let staging = tempfile::tempdir().unwrap();
+        let staged_database = Database::open(staging.path().join("gg.sqlite3")).unwrap();
+        let mut donor_settings = staged_database.load_app_settings().unwrap();
+        donor_settings.backup.local_folder = Some("/donor/backups".to_string());
+        donor_settings.platform.account_id = Some("donor-account".to_string());
+        donor_settings.workspace = serde_json::from_value(serde_json::json!({
+            "activeWorkspaceId": "donor-workspace",
+            "workspaces": [{
+                "id": "donor-workspace",
+                "name": "Donor",
+                "root": "/donor/project",
+                "kind": "external",
+                "historyEnabled": false
+            }]
+        }))
+        .unwrap();
+        donor_settings.text_editor.font_size = 19;
+        staged_database.save_app_settings(&donor_settings).unwrap();
+        drop(staged_database);
+
+        preserve_install_locality(&current_database, staging.path()).unwrap();
+
+        let restored = Database::open(staging.path().join("gg.sqlite3"))
+            .unwrap()
+            .load_app_settings()
+            .unwrap();
+        assert_eq!(
+            restored.backup.local_folder.as_deref(),
+            Some("/recipient/backups")
+        );
+        assert_eq!(
+            restored.platform.account_id.as_deref(),
+            Some("recipient-account")
+        );
+        assert_eq!(
+            serde_json::to_value(&restored.workspace).unwrap(),
+            serde_json::to_value(&local_settings.workspace).unwrap()
+        );
+        assert_eq!(restored.text_editor.font_size, 19);
+    }
+
+    #[test]
+    fn portable_restore_installs_complete_donor_state() {
+        let (directory, _, recovery_key_path) = portable_fixture();
+        let (backup_root, master_key) =
+            portable_backup_context(&directory.path().to_string_lossy(), &recovery_key_path)
+                .unwrap();
+        let engine = BackupEngine::new(FileSystemBackupStore::new(backup_root));
+        let snapshot = engine.list_snapshots(&master_key).unwrap().remove(0);
+
+        let recipient_parent = tempfile::tempdir().unwrap();
+        let recipient_app_data = recipient_parent.path().join("app-data");
+        let recipient_database = Database::open(recipient_app_data.join("gg.sqlite3")).unwrap();
+        let mut recipient_settings = recipient_database.load_app_settings().unwrap();
+        recipient_settings.backup.local_folder = Some("/recipient/backups".to_string());
+        recipient_settings.platform.account_id = Some("recipient-account".to_string());
+        recipient_database
+            .save_app_settings(&recipient_settings)
+            .unwrap();
+        fs::write(recipient_app_data.join("recipient-marker.txt"), "preserved").unwrap();
+
+        let staging_path = recipient_parent.path().join("staging");
+        let plan = engine
+            .restore_to_staging(
+                BackupRestoreRequest {
+                    current_schema_version: recipient_database.schema_version().unwrap(),
+                    master_key: &master_key,
+                    snapshot_id: &snapshot.id,
+                },
+                &staging_path,
+            )
+            .unwrap();
+        assert!(plan.warnings.is_empty());
+        preserve_install_locality(&recipient_database, &staging_path).unwrap();
+        drop(recipient_database);
+
+        let install = install_staged_restore(&recipient_app_data, &staging_path).unwrap();
+        let previous_app_data = install.previous_app_data_dir.unwrap();
+        assert_eq!(
+            fs::read_to_string(previous_app_data.join("recipient-marker.txt")).unwrap(),
+            "preserved"
+        );
+
+        let restored_settings = Database::open(recipient_app_data.join("gg.sqlite3"))
+            .unwrap()
+            .load_app_settings()
+            .unwrap();
+        assert_eq!(restored_settings.text_editor.font_size, 19);
+        assert_eq!(
+            restored_settings.backup.local_folder.as_deref(),
+            Some("/recipient/backups")
+        );
+        assert_eq!(
+            restored_settings.platform.account_id.as_deref(),
+            Some("recipient-account")
+        );
+        assert_eq!(
+            Database::open(recipient_app_data.join("sbol.sqlite3"))
+                .unwrap()
+                .load_app_settings()
+                .unwrap()
+                .text_editor
+                .font_size,
+            17
+        );
+        assert_eq!(
+            Database::open(recipient_app_data.join("flapjack.sqlite3"))
+                .unwrap()
+                .load_app_settings()
+                .unwrap()
+                .text_editor
+                .font_size,
+            18
+        );
+        assert_eq!(
+            fs::read_to_string(
+                recipient_app_data
+                    .join("skills")
+                    .join("portable-test")
+                    .join("SKILL.md")
+            )
+            .unwrap(),
+            "portable skill"
+        );
     }
 
     #[test]

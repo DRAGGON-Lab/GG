@@ -32,6 +32,35 @@ export async function chooseLocalBackupFolder() {
   return typeof selected === "string" ? selected : null;
 }
 
+export async function choosePortableBackupFolder() {
+  if (!isTauriRuntime()) {
+    tauriRequired();
+  }
+
+  const selected = await open({
+    directory: true,
+    multiple: false,
+    title: "Choose GG Circuit Backup to Restore",
+  });
+
+  return typeof selected === "string" ? selected : null;
+}
+
+export async function chooseBackupRecoveryKeyPath() {
+  if (!isTauriRuntime()) {
+    tauriRequired();
+  }
+
+  const selected = await open({
+    directory: false,
+    filters: [{ name: "Text", extensions: ["txt"] }],
+    multiple: false,
+    title: "Choose GG Circuit Recovery Key",
+  });
+
+  return typeof selected === "string" ? selected : null;
+}
+
 export async function chooseRecoveryKeyExportPath() {
   if (!isTauriRuntime()) {
     tauriRequired();
@@ -95,6 +124,52 @@ export async function executeLocalBackupRestore(snapshotId: string) {
 
   return invoke<BackupRestoreExecuteResult>("backup_local_restore_execute", {
     snapshotId,
+  });
+}
+
+export async function listPortableBackups(
+  sourcePath: string,
+  recoveryKeyPath: string,
+) {
+  if (!isTauriRuntime()) {
+    tauriRequired();
+  }
+
+  return invoke<BackupSnapshotSummary[]>("backup_portable_list", {
+    recoveryKeyPath,
+    sourcePath,
+  });
+}
+
+export async function planPortableBackupRestore(
+  sourcePath: string,
+  recoveryKeyPath: string,
+  snapshotId: string,
+) {
+  if (!isTauriRuntime()) {
+    tauriRequired();
+  }
+
+  return invoke<BackupRestorePlan>("backup_portable_restore_plan", {
+    recoveryKeyPath,
+    snapshotId,
+    sourcePath,
+  });
+}
+
+export async function executePortableBackupRestore(
+  sourcePath: string,
+  recoveryKeyPath: string,
+  snapshotId: string,
+) {
+  if (!isTauriRuntime()) {
+    tauriRequired();
+  }
+
+  return invoke<BackupRestoreExecuteResult>("backup_portable_restore_execute", {
+    recoveryKeyPath,
+    snapshotId,
+    sourcePath,
   });
 }
 

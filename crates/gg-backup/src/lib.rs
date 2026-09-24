@@ -10,11 +10,14 @@ mod store;
 
 pub mod stores;
 
+pub use database::create_sqlite_snapshot;
 pub use encryption::{
     generate_master_key, key_id, master_key_from_recovery_key, object_key_for_plaintext_hash,
     recovery_key_for_master_key, BackupMasterKey,
 };
-pub use engine::{BackupCreateRequest, BackupEngine, BackupRestorePlan, BackupRestoreRequest};
+pub use engine::{
+    BackupCreateRequest, BackupEngine, BackupFileSource, BackupRestorePlan, BackupRestoreRequest,
+};
 pub use errors::{BackupError, BackupResult};
 pub use manifest::{
     BackupFileEntry, BackupIndex, BackupObjectEntry, BackupSnapshotSummary, SnapshotManifest,
