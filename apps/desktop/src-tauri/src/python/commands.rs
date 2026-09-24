@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use gg_pyenv::{EnvStatus, InstalledPackage, OutputLine, Stream};
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{ipc::Channel, AppHandle, Emitter, Manager};
 
 use super::PythonState;
 
@@ -21,6 +21,35 @@ pub struct RunResult {
     pub run_id: u64,
     /// Process exit code, or `null` if terminated by a signal.
     pub exit_code: Option<i32>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunOutput {
+    run_id: u64,
+    stream: &'static str,
+    line: String,
+}
+
+/// This sink belongs to one invocation, including before its run ID is returned.
+fn run_output_sender(
+    channel: Channel<Option<RunOutput>>,
+    run_id: u64,
+) -> impl Fn(OutputLine) + Send + Sync + 'static {
+    move |output: OutputLine| {
+        let (stream, line) = match output.stream {
+            Stream::Stdout => match output.line.strip_prefix(gg_pyenv::DISPLAY_SENTINEL) {
+                Some(json) => ("display", json.to_string()),
+                None => ("stdout", output.line),
+            },
+            Stream::Stderr => ("stderr", output.line),
+        };
+        let _ = channel.send(Some(RunOutput {
+            run_id,
+            stream,
+            line,
+        }));
+    }
 }
 
 /// The bundled `uv` binary, or an error when the runtime is incomplete.
@@ -56,22 +85,25 @@ fn line_emitter(
 }
 
 /// Run Python code (written to a temp file, or the supplied `path`), streaming
-/// each output line to the frontend as `python-run-output` events and resolving
+/// each output line through the invocation's channel and resolving
 /// to the final exit code. When `workspace_root` has a `.venv`, the script runs
 /// with that interpreter; otherwise the bundled base interpreter is used.
 ///
 /// The script runs through a wrapper that captures rich output (matplotlib
-/// figures and `display(obj)`), which arrives as `stream: "display"` events
+/// figures and `display(obj)`), which arrives as `stream: "display"` messages
 /// carrying a JSON MIME bundle.
 ///
-/// Emitted event `python-run-output` payload (camelCase):
+/// Channel payload (camelCase):
 ///   `{ runId, stream: "stdout" | "stderr" | "display", line }`
+/// A final `null` lets the frontend wait for all output to arrive before using
+/// the result. Tauri preserves channel message order, even for large bundles.
 #[tauri::command]
 pub async fn python_run_script(
     app: AppHandle,
     code: String,
     path: Option<String>,
     workspace_root: Option<String>,
+    on_output: Channel<Option<RunOutput>>,
 ) -> Result<RunResult, String> {
     let state = app.state::<PythonState>();
     let interpreter = workspace_root
@@ -111,30 +143,12 @@ pub async fn python_run_script(
         }
     };
 
-    let emit_app = app.clone();
-    let on_line = move |output: OutputLine| {
-        // A stdout line carrying the display sentinel is a rich MIME bundle, not
-        // text. Everything else flows through as its own stream.
-        let (stream, line) = match output.stream {
-            Stream::Stdout => match output.line.strip_prefix(gg_pyenv::DISPLAY_SENTINEL) {
-                Some(json) => ("display", json.to_string()),
-                None => ("stdout", output.line),
-            },
-            Stream::Stderr => ("stderr", output.line),
-        };
-        let _ = emit_app.emit(
-            "python-run-output",
-            serde_json::json!({
-                "runId": run_id,
-                "stream": stream,
-                "line": line,
-            }),
-        );
-    };
+    let on_line = run_output_sender(on_output.clone(), run_id);
 
     let exit_code =
         gg_pyenv::run_script_with_capture(&interpreter, &runner_path, &script_path, &cwd, on_line)
             .await?;
+    on_output.send(None).map_err(|error| error.to_string())?;
 
     Ok(RunResult { run_id, exit_code })
 }
@@ -341,4 +355,70 @@ pub async fn python_lsp_diagnostics(app: AppHandle, uri: String) -> Result<Value
     let state = app.state::<PythonState>();
     let client = state.client(&app).await?;
     Ok(client.diagnostics_for(&uri).await)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use tauri::ipc::InvokeResponseBody;
+
+    use super::*;
+
+    type RecordedOutput = Arc<Mutex<Vec<Value>>>;
+
+    fn recording_channel() -> (Channel<Option<RunOutput>>, RecordedOutput) {
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&messages);
+        let channel = Channel::new(move |body| {
+            let InvokeResponseBody::Json(json) = body else {
+                panic!("expected JSON output");
+            };
+            sink.lock()
+                .unwrap()
+                .push(serde_json::from_str(&json).unwrap());
+            Ok(())
+        });
+        (channel, messages)
+    }
+
+    #[test]
+    fn run_output_stays_on_its_invocation_channel() {
+        let (first_channel, first_messages) = recording_channel();
+        let (second_channel, second_messages) = recording_channel();
+        let first = run_output_sender(first_channel.clone(), 1);
+        let second = run_output_sender(second_channel.clone(), 2);
+        let bundle = r#"{"data":{"application/vnd.gg.flapjack-characterization+json":{"name":"own result"}}}"#;
+
+        first(OutputLine {
+            stream: Stream::Stdout,
+            line: "first output".into(),
+        });
+        second(OutputLine {
+            stream: Stream::Stdout,
+            line: format!("{}{bundle}", gg_pyenv::DISPLAY_SENTINEL),
+        });
+        first(OutputLine {
+            stream: Stream::Stderr,
+            line: "first error".into(),
+        });
+        second_channel.send(None).unwrap();
+        first_channel.send(None).unwrap();
+
+        assert_eq!(
+            *first_messages.lock().unwrap(),
+            vec![
+                serde_json::json!({ "runId": 1, "stream": "stdout", "line": "first output" }),
+                serde_json::json!({ "runId": 1, "stream": "stderr", "line": "first error" }),
+                Value::Null,
+            ]
+        );
+        assert_eq!(
+            *second_messages.lock().unwrap(),
+            vec![
+                serde_json::json!({ "runId": 2, "stream": "display", "line": bundle }),
+                Value::Null,
+            ]
+        );
+    }
 }

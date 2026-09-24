@@ -14,7 +14,6 @@ import {
 import { parseDisplay } from "@/features/editor/components/artifacts/display";
 import {
   onPythonEnvOutput,
-  onPythonRunOutput,
   pythonPackagesInstall,
   pythonRunScript,
 } from "@/features/editor/core/python-service";
@@ -200,31 +199,25 @@ export async function runAnalysis(
   const script = buildAnalysisScript(dbPath, studyId, analysisType);
   let payload: SaveCharacterizationInput | null = null;
   const stderr: string[] = [];
-  let activeRunId: number | null = null;
 
-  const unlisten = await onPythonRunOutput((output) => {
-    if (activeRunId !== null && output.runId !== activeRunId) {
-      return;
-    }
-    if (output.stream === "display") {
-      const bundle = parseDisplay(output.line);
-      const found = bundle?.data?.[FLAPJACK_CHARACTERIZATION_MIME];
-      if (found) {
-        payload = found as SaveCharacterizationInput;
+  const result = await pythonRunScript(
+    script,
+    (output) => {
+      if (output.stream === "display") {
+        const bundle = parseDisplay(output.line);
+        const found = bundle?.data?.[FLAPJACK_CHARACTERIZATION_MIME];
+        if (found) {
+          payload = found as SaveCharacterizationInput;
+        }
+      } else if (output.stream === "stderr") {
+        stderr.push(output.line);
       }
-    } else if (output.stream === "stderr") {
-      stderr.push(output.line);
-    }
-  });
-
-  try {
-    const result = await pythonRunScript(script, undefined, env.root);
-    activeRunId = result.runId;
-    if (!payload && result.exitCode !== 0) {
-      throw new Error(stderr.join("\n").trim() || "Analysis failed.");
-    }
-  } finally {
-    unlisten();
+    },
+    undefined,
+    env.root,
+  );
+  if (!payload && result.exitCode !== 0) {
+    throw new Error(stderr.join("\n").trim() || "Analysis failed.");
   }
 
   if (!payload) {

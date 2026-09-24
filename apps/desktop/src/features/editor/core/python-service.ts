@@ -1,5 +1,5 @@
 import type { AgentMode } from "@protocol";
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 /// Minimal LSP shapes the frontend consumes. The backend forwards raw pylsp
@@ -136,16 +136,33 @@ export type PythonDiagnosticsEvent = {
 /// Run a Python buffer. When `path` is set the backend executes that file with
 /// its directory as the working directory; otherwise it writes a temp file.
 /// When `workspaceRoot` has a `.venv`, the script runs with that interpreter.
-export function pythonRunScript(
+/// Each invocation owns its output channel from the start. The backend sends
+/// null after the last line; wait for it before callers consume rich results.
+export async function pythonRunScript(
   code: string,
+  onOutput: (output: PythonRunOutput) => void,
   path?: string,
   workspaceRoot?: string,
 ) {
-  return invoke<PythonRunResult>("python_run_script", {
+  let finishOutput!: () => void;
+  const outputFinished = new Promise<void>((resolve) => {
+    finishOutput = resolve;
+  });
+  const onOutputChannel = new Channel<PythonRunOutput | null>((output) => {
+    if (output === null) {
+      finishOutput();
+    } else {
+      onOutput(output);
+    }
+  });
+  const result = await invoke<PythonRunResult>("python_run_script", {
     code,
     path,
     workspaceRoot,
+    onOutput: onOutputChannel,
   });
+  await outputFinished;
+  return result;
 }
 
 export function pythonRuntimeStatus() {
@@ -251,14 +268,6 @@ export function pythonLspDocumentSymbols(uri: string) {
 
 export function pythonLspDiagnostics(uri: string) {
   return invoke<LspDiagnostic[] | null>("python_lsp_diagnostics", { uri });
-}
-
-export function onPythonRunOutput(
-  callback: (output: PythonRunOutput) => void,
-): Promise<UnlistenFn> {
-  return listen<PythonRunOutput>("python-run-output", (event) =>
-    callback(event.payload),
-  );
 }
 
 export function onPythonEnvOutput(

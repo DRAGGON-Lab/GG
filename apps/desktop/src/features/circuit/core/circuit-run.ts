@@ -4,7 +4,6 @@ import { mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 import {
   onPythonEnvOutput,
-  onPythonRunOutput,
   pythonEnvCreate,
   pythonEnvStatus,
   pythonPackagesInstall,
@@ -167,19 +166,11 @@ export async function runCircuitScript(
   workspaceRoot: string,
   onLine: (line: RunLine) => void,
 ): Promise<{ exitCode: number | null }> {
-  let activeRunId: number | null = null;
-  const unlisten = await onPythonRunOutput((output) => {
-    if (activeRunId !== null && output.runId !== activeRunId) {
-      return;
-    }
-    onLine({ stream: output.stream, text: output.line });
-  });
-
-  try {
-    const result = await pythonRunScript(script, undefined, workspaceRoot);
-    activeRunId = result.runId;
-    return { exitCode: result.exitCode };
-  } finally {
-    unlisten();
-  }
+  const result = await pythonRunScript(
+    script,
+    (output) => onLine({ stream: output.stream, text: output.line }),
+    undefined,
+    workspaceRoot,
+  );
+  return { exitCode: result.exitCode };
 }
