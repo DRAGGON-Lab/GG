@@ -64,7 +64,6 @@ import {
 import {
   type LspDiagnostic,
   onPythonDiagnostics,
-  onPythonRunOutput,
   pythonRunScript,
   pythonRuntimeStatus,
   type PythonRuntimeStatus,
@@ -1070,23 +1069,14 @@ export function EditorPage(_: PageRuntime) {
     setExitCode(null);
     setRunStatus("running");
 
-    let activeRunId: number | null = null;
-    const unlisten = await onPythonRunOutput((output) => {
-      if (activeRunId !== null && output.runId !== activeRunId) {
-        return;
-      }
-
-      appendOutput(output.stream, output.line);
-    });
-
     try {
       const savedPath = document.path ?? undefined;
       const result = await pythonRunScript(
         document.text,
+        (output) => appendOutput(output.stream, output.line),
         savedPath,
         workspaceRoot ?? undefined,
       );
-      activeRunId = result.runId;
       setExitCode(result.exitCode);
     } catch (error) {
       appendOutput(
@@ -1094,7 +1084,6 @@ export function EditorPage(_: PageRuntime) {
         error instanceof Error ? error.message : "Failed to run script",
       );
     } finally {
-      unlisten();
       setRunStatus("done");
     }
   }, [appendOutput, runStatus, runtime, workspaceRoot]);

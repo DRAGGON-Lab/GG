@@ -177,6 +177,7 @@ run_verification() {
   log "Running the full repository verification suite"
   pnpm format:check
   pnpm --filter @gg/desktop lint
+  node --experimental-strip-types --test apps/desktop/tests/python-run-output.test.mjs
   pnpm --filter @gg/desktop build
   cargo "+${RUST_TOOLCHAIN}" fmt --all --check
   cargo "+${RUST_TOOLCHAIN}" clippy --workspace --all-targets --locked -- -D warnings
