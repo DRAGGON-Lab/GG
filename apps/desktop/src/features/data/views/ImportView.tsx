@@ -74,9 +74,7 @@ export function ImportView() {
     if (inferred) {
       setFormat(inferred);
     }
-    if (!name) {
-      setName(file.name);
-    }
+    setName(file.name);
     setBody(await file.text());
   };
 
