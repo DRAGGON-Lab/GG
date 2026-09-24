@@ -146,7 +146,6 @@ export function AppSettingsProvider({ children }: AppSettingsProviderProps) {
   );
 
   const refreshSettings = React.useCallback(() => {
-    setLoading(true);
     void loadAppSettings()
       .then((loadedSettings) => {
         latestSettingsRef.current = loadedSettings;
@@ -155,9 +154,6 @@ export function AppSettingsProvider({ children }: AppSettingsProviderProps) {
       })
       .catch((loadError: unknown) => {
         setError(getErrorMessage(loadError));
-      })
-      .finally(() => {
-        setLoading(false);
       });
   }, []);
 
