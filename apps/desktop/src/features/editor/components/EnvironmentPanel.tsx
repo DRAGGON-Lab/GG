@@ -33,7 +33,7 @@ const SYNBIO_PACKAGES = [
   "numpy",
   "pandas",
   "matplotlib",
-  "loica==1.0.7",
+  "loica>=1.0.7",
 ];
 
 /// PEP 503-normalized names of the synthetic-biology stack, used to tell whether
@@ -46,6 +46,31 @@ const SYNBIO_PACKAGE_NAMES = [
   "matplotlib",
   "loica",
 ];
+
+const MIN_LOICA_VERSION = "1.0.7";
+
+function isVersionAtLeast(
+  version: string | undefined,
+  minimum: string,
+): boolean {
+  if (!version) {
+    return false;
+  }
+  const versionParts = version.split(/[.-]/).map((part) => Number(part));
+  const minimumParts = minimum.split(/[.-]/).map((part) => Number(part));
+  const length = Math.max(versionParts.length, minimumParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const versionPart = versionParts[index] ?? 0;
+    const minimumPart = minimumParts[index] ?? 0;
+    if (versionPart > minimumPart) {
+      return true;
+    }
+    if (versionPart < minimumPart) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /// Whether every package in the synthetic-biology stack is installed.
 function isSynbioInstalled(packages: InstalledPackage[] | null): boolean {
@@ -60,7 +85,7 @@ function isSynbioInstalled(packages: InstalledPackage[] | null): boolean {
   );
   return (
     SYNBIO_PACKAGE_NAMES.every((name) => installed.has(name)) &&
-    installed.get("loica") === "1.0.7"
+    isVersionAtLeast(installed.get("loica"), MIN_LOICA_VERSION)
   );
 }
 

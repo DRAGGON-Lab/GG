@@ -5,8 +5,8 @@ const integerFormatter = new Intl.NumberFormat("en-US");
 
 export const monoClass = "font-mono text-[12px]";
 
-export function formatInt(value: number) {
-  return integerFormatter.format(value);
+export function formatInt(value: number | null) {
+  return value === null ? "—" : integerFormatter.format(value);
 }
 
 export function formatDuration(durationMs: number) {

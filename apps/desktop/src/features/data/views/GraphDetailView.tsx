@@ -31,7 +31,7 @@ export function GraphDetailView({
 
   const summary = graph.data;
   const page = triples.data;
-  const total = page?.total ?? 0;
+  const total = page?.total ?? null;
 
   return (
     <div className="min-w-0">
@@ -62,7 +62,24 @@ export function GraphDetailView({
 
       {page ? (
         page.triples.length === 0 ? (
-          <EmptyState message="This graph has no triples." />
+          <>
+            <EmptyState
+              message={
+                offset === 0 ? "This graph has no triples." : "No more triples."
+              }
+            />
+            {offset > 0 ? (
+              <Button
+                onClick={() =>
+                  setOffset((value) => Math.max(0, value - PAGE_SIZE))
+                }
+                size="sm"
+                variant="subtle"
+              >
+                Previous
+              </Button>
+            ) : null}
+          </>
         ) : (
           <>
             <div className="overflow-hidden rounded-[8px] border border-cg-border">
@@ -97,8 +114,8 @@ export function GraphDetailView({
 
             <div className="mt-3 flex items-center justify-between text-[12px] text-cg-muted">
               <span>
-                {offset + 1}–{offset + page.triples.length} of{" "}
-                {formatInt(total)}
+                {offset + 1}–{offset + page.triples.length}
+                {total === null ? "" : ` of ${formatInt(total)}`}
               </span>
               <div className="flex gap-2">
                 <Button
@@ -112,7 +129,11 @@ export function GraphDetailView({
                   Previous
                 </Button>
                 <Button
-                  disabled={offset + PAGE_SIZE >= total}
+                  disabled={
+                    total === null
+                      ? page.triples.length < PAGE_SIZE
+                      : offset + PAGE_SIZE >= total
+                  }
                   onClick={() => setOffset((value) => value + PAGE_SIZE)}
                   size="sm"
                   variant="subtle"

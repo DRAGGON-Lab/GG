@@ -18,9 +18,10 @@ import {
 const CIRCUIT_ENV_DIR = "circuit-runtime";
 
 /// LOICA 1.0.7 includes pandas-2-compatible assay output and preserves
-/// gene-product HEX colors for downstream tables and plots. Pin the managed
-/// environment so existing installs can be upgraded deterministically.
-const LOICA_REQUIREMENT = "loica==1.0.7";
+/// gene-product HEX colors for downstream tables and plots. Keep the managed
+/// environment on 1.0.7 or newer so active LOICA co-development can pull the
+/// latest compatible release until we freeze it for an app release.
+const LOICA_REQUIREMENT = "loica>=1.0.7";
 const CIRCUIT_ENV_MARKER = "circuit-runtime-req.txt";
 
 /// Packages the managed environment needs for circuit simulation. Plotly backs

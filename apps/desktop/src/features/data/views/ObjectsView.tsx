@@ -16,12 +16,12 @@ import { cx } from "@/ui/class-name";
 const PAGE_SIZE = 100;
 
 type Filters = {
+  iriQuery: string;
   sbolClass: string;
   role: string;
-  graphId: string;
 };
 
-const EMPTY_FILTERS: Filters = { graphId: "", role: "", sbolClass: "" };
+const EMPTY_FILTERS: Filters = { iriQuery: "", role: "", sbolClass: "" };
 
 export function ObjectsView() {
   const [selectedIri, setSelectedIri] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export function ObjectsView() {
     () =>
       loadObjects({
         after,
-        graphId: filters.graphId.trim() || null,
+        iriQuery: filters.iriQuery.trim() || null,
         limit: PAGE_SIZE,
         role: filters.role.trim() || null,
         sbolClass: filters.sbolClass.trim() || null,
@@ -58,7 +58,7 @@ export function ObjectsView() {
   return (
     <div className="min-w-0">
       <SectionHeader
-        subtitle="Browse typed SBOL objects. Filter by class, role, or graph."
+        subtitle="Browse typed SBOL objects. Filter by class, role, or IRI."
         title="Objects"
       />
 
@@ -76,10 +76,10 @@ export function ObjectsView() {
           value={draft.role}
         />
         <FilterInput
-          label="Graph ID"
-          onChange={(value) => setDraft((d) => ({ ...d, graphId: value }))}
-          placeholder="graph UUID"
-          value={draft.graphId}
+          label="IRI"
+          onChange={(value) => setDraft((d) => ({ ...d, iriQuery: value }))}
+          placeholder="e.g. GFP or promoter"
+          value={draft.iriQuery}
         />
         <div className="flex items-end">
           <Button onClick={applyFilters} size="sm" variant="default">

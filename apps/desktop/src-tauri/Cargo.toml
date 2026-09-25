@@ -29,14 +29,15 @@ gg-data = { path = "../../../crates/gg-data" }
 gg-pyenv = { path = "../../../crates/gg-pyenv" }
 gg-python-lsp = { path = "../../../crates/gg-python-lsp" }
 gg-workspace = { path = "../../../crates/gg-workspace" }
-sbol-db-core = "0.1.1"
-sbol-db-storage = "0.1.1"
-sbol-db-sqlite = "0.1.1"
-sbol-db-sparql = "0.1.1"
-sbol-db-rdf = "0.1.1"
-sbol-db-backend = "0.1.1"
-sbol-db-server = "0.1.1"
-sbol-db-jobs = "0.1.1"
+sbol-db-app = "0.1.7"
+sbol-db-core = "0.1.7"
+sbol-db-storage = "0.1.7"
+sbol-db-sqlite = "0.1.7"
+sbol-db-sparql = "0.1.7"
+sbol-db-rdf = "0.1.7"
+sbol-db-backend = "0.1.7"
+sbol-db-server = "0.1.7"
+sbol-db-jobs = "0.1.7"
 axum = "0.7"
 tokio-util = "0.7"
 sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio-rustls"] }
