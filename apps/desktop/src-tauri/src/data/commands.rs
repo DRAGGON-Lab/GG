@@ -4,13 +4,12 @@
 
 use std::time::Instant;
 
-use gg_data::sbol::SbolObjectSearch;
 use sbol_db_core::GraphId;
 use sbol_db_core::SerializationFormat;
 use sbol_db_sparql::{parse_query, ResultFormat, SparqlOptions};
 use sbol_db_storage::{
-    DbStats, ImportInput, LabStore, ObjectStore, SbolStore, SequenceSearchOptions,
-    SequenceSearchStore, SqlConsole, SqlExecuteRequest,
+    DbStats, ImportInput, ImportOverwrite, LabStore, ListObjectsFilter, ObjectStore, SbolStore,
+    SequenceSearchOptions, SequenceSearchStore, SqlConsole, SqlExecuteRequest,
 };
 use tauri::State;
 use uuid::Uuid;
@@ -70,8 +69,7 @@ fn parse_import_format(s: &str) -> Result<SerializationFormat, String> {
 #[tauri::command]
 pub async fn data_overview(data: State<'_, DataStore>) -> Result<OverviewDto, String> {
     let counts = data.store.corpus_counts().await.map_err(err)?;
-    let mut recent = data.store.recent_graphs(5).await.map_err(err)?;
-    refresh_graph_object_counts(&data, &mut recent).await?;
+    let recent = data.store.recent_graphs(5).await.map_err(err)?;
     let classes = data.store.top_classes(10).await.map_err(err)?;
     Ok(OverviewDto {
         counts: counts.into(),
@@ -93,12 +91,11 @@ pub async fn data_graphs_list(
     let offset = offset.unwrap_or(0).max(0);
     let kind_ref = kind.as_deref();
     let total = data.store.count_graphs(kind_ref).await.map_err(err)?;
-    let mut graphs = data
+    let graphs = data
         .store
         .list_graph_overviews(kind_ref, limit, offset)
         .await
         .map_err(err)?;
-    refresh_graph_object_counts(&data, &mut graphs).await?;
     Ok(GraphListDto {
         total,
         limit,
@@ -109,24 +106,13 @@ pub async fn data_graphs_list(
 
 #[tauri::command]
 pub async fn data_graph_get(data: State<'_, DataStore>, id: Uuid) -> Result<GraphDto, String> {
-    let mut graph = data
+    let graph = data
         .store
         .get_graph_overview(GraphId(id))
         .await
         .map_err(err)?
         .ok_or_else(|| format!("graph {id} not found"))?;
-    graph.object_count = data.graph_object_count(graph.id).await?;
     Ok(graph.into())
-}
-
-async fn refresh_graph_object_counts(
-    data: &DataStore,
-    graphs: &mut [sbol_db_storage::GraphOverview],
-) -> Result<(), String> {
-    for graph in graphs {
-        graph.object_count = data.graph_object_count(graph.id).await?;
-    }
-    Ok(())
 }
 
 #[tauri::command]
@@ -169,21 +155,25 @@ pub async fn data_objects_list(
     let limit = limit
         .unwrap_or(OBJECT_DEFAULT_LIMIT)
         .clamp(1, OBJECT_MAX_LIMIT);
-    let iri_query = iri_query
+    let iri_contains = iri_query
         .as_deref()
         .map(str::trim)
-        .filter(|query| !query.is_empty());
-    let graph_id = graph_id.map(|id| id.to_string());
-    let objects = data.objects.list(SbolObjectSearch {
-        sbol_class: sbol_class.as_deref(),
-        role: role.as_deref(),
-        graph_id: graph_id.as_deref(),
-        iri_query,
-        after_iri: after.as_deref(),
-        limit,
-    })?;
+        .filter(|query| !query.is_empty())
+        .map(str::to_owned);
+    let objects = data
+        .store
+        .list_objects(&ListObjectsFilter {
+            sbol_class,
+            role,
+            graph_id: graph_id.map(GraphId),
+            iri_contains,
+            after_iri: after,
+            limit,
+        })
+        .await
+        .map_err(err)?;
     let next_cursor = if objects.len() as u32 >= limit {
-        objects.last().map(|o| o.iri.to_owned())
+        objects.last().map(|o| o.iri.as_str().to_owned())
     } else {
         None
     };
@@ -277,7 +267,7 @@ pub async fn data_sparql_execute(
     let started = Instant::now();
     let outcome = data
         .sparql
-        .execute(&query, requested_format, &options)
+        .execute(&query, requested_format, None, &options)
         .await
         .map_err(err)?;
     let elapsed_ms = started.elapsed().as_millis() as u64;
@@ -373,6 +363,7 @@ pub async fn data_import(
         created_by: None,
         name,
         description,
+        overwrite: ImportOverwrite::Fail,
     };
     data.store
         .import_document(input)
@@ -397,6 +388,7 @@ pub async fn data_import_many(
             created_by: None,
             name: item.name,
             description: item.description,
+            overwrite: ImportOverwrite::Fail,
         });
     }
     data.store

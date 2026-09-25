@@ -3,7 +3,6 @@
 //! drop fields the UI never reads (content hashes, the always-`None` SQLite
 //! backend pid).
 
-use gg_data::sbol::SbolObject;
 use sbol_db_core::{ImportReport, ObjectTerm, SbolObjectRecord, SubjectTerm, Triple};
 use sbol_db_storage::{
     BatchSequenceMatch, ClassCount, CorpusCounts, GraphOverview, RelationalSchema, SequenceMatch,
@@ -44,9 +43,9 @@ pub struct GraphDto {
     pub name: Option<String>,
     pub source_uri: Option<String>,
     pub serialization_format: Option<String>,
-    pub created_at: String,
-    pub object_count: i64,
-    pub triple_count: i64,
+    pub created_at: Option<String>,
+    pub object_count: Option<i64>,
+    pub triple_count: Option<i64>,
 }
 
 impl From<GraphOverview> for GraphDto {
@@ -58,7 +57,7 @@ impl From<GraphOverview> for GraphDto {
             name: g.name,
             source_uri: g.source_uri,
             serialization_format: g.serialization_format,
-            created_at: g.created_at.to_rfc3339(),
+            created_at: g.created_at.map(|created_at| created_at.to_rfc3339()),
             object_count: g.object_count,
             triple_count: g.triple_count,
         }
@@ -171,7 +170,7 @@ pub fn triple_to_row(triple: Triple) -> TripleRowDto {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphTriplesDto {
-    pub total: i64,
+    pub total: Option<i64>,
     pub limit: i64,
     pub offset: i64,
     pub triples: Vec<TripleRowDto>,
@@ -202,23 +201,6 @@ impl From<SbolObjectRecord> for ObjectDto {
             name: o.name,
             description: o.description,
             graph_id: o.graph_id.map(|g| g.0.to_string()),
-            types: o.types,
-            roles: o.roles,
-            data: o.data,
-        }
-    }
-}
-
-impl From<SbolObject> for ObjectDto {
-    fn from(o: SbolObject) -> Self {
-        Self {
-            id: o.id,
-            iri: o.iri,
-            sbol_class: o.sbol_class,
-            display_id: o.display_id,
-            name: o.name,
-            description: o.description,
-            graph_id: o.graph_id,
             types: o.types,
             roles: o.roles,
             data: o.data,

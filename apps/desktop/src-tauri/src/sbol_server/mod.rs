@@ -14,6 +14,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::sync::Arc;
 
+use sbol_db_app::AppServices;
 use sbol_db_backend::Backend;
 use sbol_db_jobs::{default_registry, Worker, WorkerConfig};
 use sbol_db_server::{router, AppState, Metrics, SchemaCache, ServerConfig};
@@ -48,6 +49,7 @@ pub async fn start(sbol_db_path: &Path) -> Result<SbolServer, String> {
         service: backend.store.clone(),
         sparql,
         sparql_update,
+        app: Arc::new(AppServices::from_backend(&backend)),
         metrics,
         jobs: backend.jobs.clone(),
         lab: backend.lab.clone(),

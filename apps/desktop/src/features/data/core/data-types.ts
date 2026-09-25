@@ -17,9 +17,9 @@ export type Graph = {
   name: string | null;
   sourceUri: string | null;
   serializationFormat: string | null;
-  createdAt: string;
-  objectCount: number;
-  tripleCount: number;
+  createdAt: string | null;
+  objectCount: number | null;
+  tripleCount: number | null;
 };
 
 export type ClassCount = {
@@ -54,7 +54,7 @@ export type TripleRow = {
 };
 
 export type GraphTriples = {
-  total: number;
+  total: number | null;
   limit: number;
   offset: number;
   triples: TripleRow[];
